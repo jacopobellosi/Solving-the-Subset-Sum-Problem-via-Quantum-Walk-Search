@@ -70,13 +70,7 @@ class TestQroutineSlidingSort(CircuitTestHelpers):
             qrs_data[-1].start + qrs_data[-1].length + n * m,
             int,
         )
-        prw.qarray_noalloc(None,
-                                None,
-                                "anc",
-                                qrs_data[-1].start + qrs_data[-1].length +
-                                n * m + n,
-                                str,
-                                unknown_size=True)
+        prw.qarray_noalloc(None, None, "anc",qrs_data[-1].start + qrs_data[-1].length +n * m + n,str,unknown_size=True)
 
         qf = insert(n, m)
         prw.apply(qf, qr_x, *qrs_data)

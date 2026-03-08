@@ -318,55 +318,84 @@ def bix_matrix_compile_time(n: int, columns: int, m: int, weight: int,
     # This one is the VBE proposed to TC, which works with direct encoding
     # instead of deltas
 
-    if weight < 1 or weight >= n:
-        raise ArgumentError("Weight should be >=1 and < n, given {}" % weight)
-    # elems_diffs = [elems[0]] + [j - i for i, j in zip(elems, elems[1:])]
-    rows = n
+    if weight < 1 or weight >= n:  # Ensure the subset size k is strictly valid
+        raise ArgumentError("Weight should be >=1 and < n, given {}" % weight)  # Abort if bounds are violated
+    # elems_diffs = [elems[0]] + [j - i for i, j in zip(elems, elems[1:])]  # Unused legacy BIX delta approach
+    rows = n  # The number of iterations 'i' equals the universe size 'n'
 
-    qrout = QRoutine()
-    wreg = qrout.new_wires(n)
+    # =====================================================================
+    # EXPLANATION OF THE ALLOCATION BLOCK:
+    # Here the code creates the empty physical registers needed for the VBE.
+    # From the paper: "We use a register S of km qubits to encode the k elements".
+    # 'omatrix_flat' will become the register S (storing the chosen subset), while
+    # 'zmatrix_flat' will become S' (storing the remaining complement subset).
+    # Each element has a width of 'm' qubits, and there are 'k' (weight) and 
+    # 'n-k' elements respectively.
+    # =====================================================================
 
-    omatrix_flat = []
-    # flattened row-wise
-    for row in range(weight):
-        for col in range(columns):
-            qr = qrout.new_wires(m)
-            omatrix_flat.append(qr)
-    zmatrix_flat = []
-    for row in range(n - weight):
-        for col in range(columns):
-            qr = qrout.new_wires(m)
-            zmatrix_flat.append(qr)
-    LOGGER.debug("omatrix_flat, len %d", len(omatrix_flat))
-    # LOGGER.debug(omatrix_flat)
-    LOGGER.debug("zmatrix_flat, len %d", len(zmatrix_flat))
-    # LOGGER.debug(zmatrix_flat)
+    qrout = QRoutine()  # Instantiate the AQASM quantum routine object
+    wreg = qrout.new_wires(n)  # Allocate n qubits for the Dicke state (\sigma) acting as control
 
-    #
+    omatrix_flat = []  # Initialize flat list for the S register cells (the k elements)
+    # flattened row-wise  # Note: 2D matrix cells are stored sequentially in 1D
+    for row in range(weight):  # Loop to allocate k elements (the weight)
+        for col in range(columns):  # Loop through columns (usually 1 for simple arrays)
+            qr = qrout.new_wires(m)  # Allocate m qubits per element cell
+            omatrix_flat.append(qr)  # Add cell to the S register structure
+    zmatrix_flat = []  # Initialize flat list for the S' register cells (the complement array)
+    for row in range(n - weight):  # Loop to allocate n-k elements (the complement)
+        for col in range(columns):  # Loop through columns again
+            qr = qrout.new_wires(m)  # Allocate m qubits per complement element cell
+            zmatrix_flat.append(qr)  # Add cell to the S' complement register
+    LOGGER.debug("omatrix_flat, len %d", len(omatrix_flat))  # Log the total size of S memory
+    # LOGGER.debug(omatrix_flat)  # Optional log to dump S register wires
+    LOGGER.debug("zmatrix_flat, len %d", len(zmatrix_flat))  # Log the total size of S' memory
+    # LOGGER.debug(zmatrix_flat)  # Optional log to dump S' register wires
+
+    # =====================================================================
+    # VERTEX BINARY ENCODING (VBE) - Described in "Sec. III-B. Operator UV"
+    # This specific variation encodes arbitrary values and duplicates directly,
+    # mapping labels (indices) from the Johnson graph onto the actual data values.
+    # =====================================================================
+
+    # Initialize the C-SHIFT gates (cyclic left shift operation)
+    # The paper notes: "The C-SHIFT gate requires (k-1)m CSWAP gates applied sequentially."
+    # qleftrotones acts on register S, qleftrotzeros acts on complement S'
     qleftrotones = rotate.reg_reversal(len(omatrix_flat), m, columns)
     qleftrotzeros = rotate.reg_reversal(len(zmatrix_flat), m, columns)
 
-    for row in range(rows):
-        for col in range(columns):
-            matrix_val = matrix[row * columns + col]
-            LOGGER.debug("matrix[%d][%d]", row, col)
-            LOGGER.debug("It is computed as row*columns + col")
-            val = get_bitarray_from_int(matrix_val, m, False)
-            LOGGER.debug("It is %d, meaning %s", matrix_val, val)
-            q_row_init = qregs_init.initialize_qureg_given_bitarray(val, False)
-            LOGGER.debug("Initialize omatrix[%d] (%s) to %s", col,
-                         str(omatrix_flat[col]), val)
-            qrout.apply(q_row_init.ctrl(1), wreg[row], omatrix_flat[0 + col])
-            qrout.apply(X, wreg[row])
-            qrout.apply(q_row_init.ctrl(1), wreg[row], zmatrix_flat[0 + col])
-            qrout.apply(X, wreg[row])
-        if weight != 1:
-            LOGGER.debug("Rotating ones ctrld on wreg[%d]", row)
-            qrout.apply(qleftrotones.ctrl(1), wreg[row], omatrix_flat)
-        if n - weight != 1:
-            LOGGER.debug("Rotating zeros ctrld on wreg[%d]", row)
-            qrout.apply(X, wreg[row])
-            qrout.apply(qleftrotzeros.ctrl(1), wreg[row], zmatrix_flat)
-            qrout.apply(X, wreg[row])
+    # Paper Step: "We perform i iterations, with i in {0, ..., n-1}"
+    for row in range(rows):  # Loop i in {0, ..., n-1} as described in the paper
+        for col in range(columns):  # Loop over columns (typically 1 for 1D arrays)
+            matrix_val = matrix[row * columns + col]  # Get the value Xi from the input data array
+            LOGGER.debug("matrix[%d][%d]", row, col)  # Log debug information for matrix indices
+            LOGGER.debug("It is computed as row*columns + col")  # Log debug information for flat index
+            val = get_bitarray_from_int(matrix_val, m, False)  # Convert the integer value Xi into a binary bitstring of length m
+            LOGGER.debug("It is %d, meaning %s", matrix_val, val)  # Log the binary encoding mapping
+            q_row_init = qregs_init.initialize_qureg_given_bitarray(val, False)  # Prepare the C-xi gate sequence of CNOTs based on the binary value
+            LOGGER.debug("Initialize omatrix[%d] (%s) to %s", col,  # Log debug information for initialization
+                         str(omatrix_flat[col]), val)  # Log the target cell object
+            qrout.apply(q_row_init.ctrl(1), wreg[row], omatrix_flat[0 + col])  # Apply C-xi gate to S_0 controlled by \sigma|i
+            
+            # Paper Step: "Similarly, we encode in S' the complement subset"
+            # We invert the control bit \sigma|i using an X gate to write into the complement register if \sigma|i = 0
+            qrout.apply(X, wreg[row])  # Apply X gate to invert \sigma_i so it acts as \sigma'_i control
+            qrout.apply(q_row_init.ctrl(1), wreg[row], zmatrix_flat[0 + col])  # Apply C-xi gate to complement S'_0 controlled by inverted \sigma|i
+            qrout.apply(X, wreg[row])  # Restore \sigma_i to its original state (uncompute inversion)
+            
+        # Paper Step: "We then perform a cyclic left shift operation (gate C-SHIFT) on S"
+        # This shifts the position of the value in S by one position in a circular fashion, making a blank slot ready in S_0.
+        if weight != 1:  # Only perform shift if subset has > 1 element
+            LOGGER.debug("Rotating ones ctrld on wreg[%d]", row)  # Log the rotation taking place
+            qrout.apply(qleftrotones.ctrl(1), wreg[row], omatrix_flat)  # Apply C-SHIFT on S controlled by \sigma|i
+            
+        # Sub-step: "The only difference is that all the controlled operations 
+        # are managed using the indices equal to zero on \sigma [inverted wreg]"
+        # So we do the exact equivalent Shift operation on complement S'
+        if n - weight != 1:  # Only perform shift on complement if it has > 1 element
+            LOGGER.debug("Rotating zeros ctrld on wreg[%d]", row)  # Log the complement rotation taking place
+            qrout.apply(X, wreg[row])  # Apply X gate to invert \sigma_i
+            qrout.apply(qleftrotzeros.ctrl(1), wreg[row], zmatrix_flat)  # Apply C-SHIFT on complement S' controlled by inverted \sigma|i
+            qrout.apply(X, wreg[row])  # Restore \sigma_i to its original state (uncompute inversion)
 
-    return qrout
+    return qrout  # Return the fully assembled AQASM logic circuit for VBE

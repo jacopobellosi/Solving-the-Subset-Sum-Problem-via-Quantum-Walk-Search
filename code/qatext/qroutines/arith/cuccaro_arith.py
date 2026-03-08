@@ -207,6 +207,7 @@ def _majority(name: str) -> QRoutine:
     a = qfun.new_wires(1)[0]
     qfun.apply(CNOT, a, b)
     qfun.apply(CNOT, a, c)
+    # Paper Step: "requires ... 2m-2 CCNOT gates". This is one of the CCNOT (Toffoli) gates in the MAJ step!
     qfun.apply(CCNOT, c, b, a)
     return qfun
 
@@ -221,6 +222,7 @@ def _unmajority(name: str) -> QRoutine:
     a = qfun.new_wires(1)[0]
     qfun.apply(X, b)
     qfun.apply(CNOT, c, b)
+    # Paper Step: "requires ... 2m-2 CCNOT gates". This is the other CCNOT (Toffoli) gate used in the UMA step!
     qfun.apply(CCNOT, c, b, a)
     qfun.apply(X, b)
     qfun.apply(CNOT, a, c)
