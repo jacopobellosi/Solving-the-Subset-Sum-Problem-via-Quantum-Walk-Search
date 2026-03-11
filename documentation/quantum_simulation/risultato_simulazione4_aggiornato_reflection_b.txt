@@ -1,0 +1,16 @@
+nohup: ignoring input
+To simulate is True
+n 3, k 2, m 2, values [1, 2, 3], target sum = 5
+Program qubits
+dicke slice(0, 3, None)
+s_1 slice(3, 7, None)
+s_0 slice(7, 9, None)
+t_1 slice(9, 13, None)
+t_0 slice(13, 15, None)
+a_1 slice(15, 17, None)
+a_0 slice(17, 19, None)
+w_1 slice(19, 21, None)
+w_0 slice(21, 22, None)
+qpe_s slice(22, 23, None)
+sum slice(23, 26, None)
+{'nbqbits': 29, 'size': 266, 'gates': {'custom gate': 0, 'H': 5, 'X': 152, 'CNOT': 1648, 'C-RY': 23, 'C-X': 8, 'C-SWAP': 80, 'C-CNOT': 126, 'CCNOT': 576, 'C-C-Z': 6, 'CSIGN': 4, 'Z': 2}, 'measurements': 0, 'resets': 0, 'logic': 0, 'breaks': 0, 'remaps': 0, 'gate_size': 2630}
