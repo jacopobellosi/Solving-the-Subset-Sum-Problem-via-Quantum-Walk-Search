@@ -1,4 +1,5 @@
 # Import math utilities (e.g., combinatorics)
+# Code update for test the new update (17/03/2026)
 from math import comb
 
 import numpy as np
@@ -257,25 +258,32 @@ def main(n,
                           wstate_ones, wstate_zeros)  # Including the W-states
                 for j in range(k):  # Loop over the k elements of the subset S
                     prw.apply(X, wstate_ones[j])  # Apply X gates to effectively flip the control condition for the 0 state
-                prw.apply(Z.ctrl(k), qpe_s[qw_iter], wstate_ones)  # Apply a controlled-Z (Phase inversion) conditioned on the QPE current bit
-                for j in range(k):  # Loop over the k elements again
-                    prw.apply(X, wstate_ones[j])  # Remove the X gates to restore the original state
+                for j in range(n - k):  # We must ALSO flip the zeros state complement for the reflection projection
+                    prw.apply(X, wstate_zeros[j])
+                prw.apply(Z.ctrl(n), qpe_s[qw_iter], wstate_ones, wstate_zeros)  # Apply a controlled-Z conditioned on the ENTIRE coin state reverting to 0
+                for j in range(k):  # Remove the X gates to restore the original state
+                    prw.apply(X, wstate_ones[j])  
+                for j in range(n - k):  
+                    prw.apply(X, wstate_zeros[j])  
                 prw.apply(qrw_update, node_s_ones, node_s_zeros, node_t_ones,  # Re-apply U_U to recreate the edge superposition (Ref A complete)
                           node_t_zeros, alpha_ones, alpha_zeros, wstate_ones,  # Passing registers
                           wstate_zeros)  # Passing registers
-
-                # Reflection B (Ref B, on the adjacent node, swapping the coordinates)
-                prw.apply(qrw_update.dag(), node_s_zeros, node_s_ones,  # Apply U_U^\dagger but with S and S' SWAPPED to reflect on the adjacent vertex
-                          node_t_zeros, node_t_ones, alpha_zeros, alpha_ones,  # Notice how node_s_zeros takes the place of node_s_ones
-                          wstate_zeros, wstate_ones)  # Notice how wstate_zeros takes the place of wstate_ones
-                for j in range(n - k):  # Loop over the n-k elements of the complement group S'
-                    prw.apply(X, wstate_zeros[j])  # Apply X gates to flip the control condition
-                prw.apply(Z.ctrl(n - k), qpe_s[qw_iter], wstate_zeros)  # Apply the controlled-Z phase inversion on the adjacent Reflection B
-                for j in range(k):  # BUG IN ORIGINAL LOGIC: The paper dictates this should restore the n-k elements, not k elements
-                    prw.apply(X, wstate_zeros[j])  # Remove the X gates on the complement wstate
-                prw.apply(qrw_update, node_s_zeros, node_s_ones, node_t_zeros,  # Re-apply the SWAPPED U_U operator to bounce back (Ref B complete)
-                          node_t_ones, alpha_zeros, alpha_ones, wstate_zeros,  # Passing swapped registers
-                          wstate_ones)  # Passing swapped registers
+                # Reflection B (Ref B, on the adjacent node, swapping the spatial coordinates)
+                prw.apply(qrw_update.dag(), node_t_ones, node_t_zeros,  # Apply U_U^\dagger but with S and T SWAPPED to reflect on the adjacent vertex
+                          node_s_ones, node_s_zeros, alpha_ones, alpha_zeros,  # Notice how node_t_* takes the place of node_s_*
+                          wstate_ones, wstate_zeros)  # Ancillas remain correctly mapped to their respective k and n-k bounds
+                for j in range(k):  # Loop over the k elements of the subset S
+                    prw.apply(X, wstate_ones[j])  # Apply X gates to flip the control condition
+                for j in range(n - k):  # Flip zeros state complement
+                    prw.apply(X, wstate_zeros[j])
+                prw.apply(Z.ctrl(n), qpe_s[qw_iter], wstate_ones, wstate_zeros)  # Apply the complete controlled-Z phase inversion on the adjacent Reflection B
+                for j in range(k):  # Restore states
+                    prw.apply(X, wstate_ones[j])  # Remove the X gates on the wstate
+                for j in range(n - k):  
+                    prw.apply(X, wstate_zeros[j])  
+                prw.apply(qrw_update, node_t_ones, node_t_zeros, node_s_ones,  # Re-apply the SWAPPED U_U operator to bounce back (Ref B complete)
+                          node_s_zeros, alpha_ones, alpha_zeros, wstate_ones,  # Passing swapped registers
+                          wstate_zeros)  # Passing swapped registersrs
 
             # Clear memory (Reset) and deallocate the temporary variables \alpha and \omega 
             # in order to clean up the quantum gate "thermodynamic waste"
@@ -341,7 +349,7 @@ if __name__ == '__main__':
     # n = size of X
     n = len(values)
     # k = requested subset size for the constrained Subset-Sum
-    k = 2
+    k = 1
     # m = log_2(max(X))
     m = max(values).bit_length()
     
