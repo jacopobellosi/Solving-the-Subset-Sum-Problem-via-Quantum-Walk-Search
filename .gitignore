@@ -3,3 +3,9 @@ documentation/Solving_the_Subset_Sum_Problem_via_Quantum_Walk_Search.pdf
 documentation/ex_SSP_by_QW.pdf
 Documentation/Solving_the_Subset_Sum_Problem_via_Quantum_Walk_Search.pdf
 Documentation/ex_SSP_by_QW.pdf
+Documentation/Quantum software experiments - A reporting and laboratory.pdf
+
+# Ignore temporary text extracts used for AI parsing
+documentation/*.txt
+documentation/*.md
+Documentation/*.txt
