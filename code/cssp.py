@@ -155,29 +155,47 @@ def oracle(n, k, m, n_qubits_sum, target_value):
 
 
 # =====================================================================
-# U_PREP OPERATOR (State Preparation)
-# Wraps Dicke state generation + VBE encoding into a single QRoutineWrapper.
-# This allows calling .dag() safely (QRoutineWrapper.dag() works with
-# myQLM's linker, unlike @build_gate decorated functions which crash).
+# GROVER ITERATION (Oracle + Diffuser as a single QRoutine)
+# Uses QRoutine-level compute/uncompute (same proven pattern as oracle())
+# to avoid the myQLM linker KeyError on .dag() of @build_gate functions.
+#
+# Mathematical sequence per call (state enters in computational basis):
+#   compute(U_prep) -> Oracle -> uncompute(U_prep^dag) -> Z_0
+# When called N times from |0>, then followed by a final U_prep:
+#   U_prep * [Z_0 * U_prep^dag * O * U_prep]^N |0> = G^N |psi>
 # =====================================================================
-def prepare_state(n, k, m, sorted_values):
+def grover_iter(n, k, m, n_qubits_sum, target_sum, sorted_values):
     qrw = QRoutineWrapper(QRoutine())
     dicke = qrw.qarray_wires(n, 1, "dicke", str)
     node_s_ones = qrw.qarray_wires(k, m, "s_1", int)
     node_s_zeros = qrw.qarray_wires(n - k, m, "s_0", int)
+    sum_reg = qrw.qarray_wires(1, n_qubits_sum, "sum", int)
 
-    # Step 1: Generate Dicke state |D^n_k> on the sigma register
-    qrw.apply(generate(n, k), dicke)
-    # Step 2: Vertex Binary Encoding - maps Dicke indices to actual data values
-    qrw.apply(bix.bix_matrix_compile_time(n, 1, m, k, sorted_values),
-              dicke, node_s_ones, node_s_zeros)
+    # --- Phase 1: Prepare state (recorded by compute for automatic reversal) ---
+    with qrw.compute():
+        qrw.apply(generate(n, k), dicke)
+        qrw.apply(bix.bix_matrix_compile_time(n, 1, m, k, sorted_values),
+                  dicke, node_s_ones, node_s_zeros)
+
+    # --- Phase 2: Oracle (marks target subsets with phase flip) ---
+    qf_ora = oracle(n, k, m, n_qubits_sum, target_sum)
+    qrw.apply(qf_ora, node_s_ones, sum_reg)
+
+    # --- Phase 3: Undo preparation (automatic .dag() at QRoutine level) ---
+    qrw.uncompute()
+
+    # --- Phase 4: Reflect around |0> ---
+    for j in range(n):
+        qrw.apply(X, dicke[j])
+    qrw.apply(Z.ctrl(n - 1), dicke)
+    for j in range(n):
+        qrw.apply(X, dicke[j])
 
     return qrw
 
 
 # =====================================================================
-# MAIN - Global construction of the MNRS Quantum Walk Search
-# Assembles all parts of the paper to solve the CSSP (Subset Sum Problem)
+# MAIN - Assembles the Grover search on VBE-encoded Johnson graph
 # =====================================================================
 def main(n,
          k,
@@ -186,54 +204,31 @@ def main(n,
          low_width=True,
          to_simulate=False):
 
-    # m = number of bits required to encode the maximum value in the set
     m = max(values).bit_length()
-
-    # n_qubits_sum = Number of qubits needed to safely hold the sum of k integers without overflow
     n_qubits_sum = int(np.ceil(np.log2(k))) + m
-
     sorted_values = sorted(values)
     prw = ProgramWrapper(Program())
 
-    # === ALLOCATION OF REGISTERS ===
+    # === REGISTER ALLOCATION ===
     dicke = prw.qarray_alloc(n, 1, "dicke", str)
     node_s_ones = prw.qarray_alloc(k, m, "s_1", int)
     node_s_zeros = prw.qarray_alloc(n - k, m, "s_0", int)
     sum_reg = prw.qarray_alloc(1, n_qubits_sum, "sum", int)
 
-    # Instantiate preparation operator as a QRoutineWrapper
-    # (QRoutineWrapper.dag() works with myQLM linker, unlike @build_gate.dag())
-    qrw_prep = prepare_state(n, k, m, sorted_values)
+    # Build the Grover iteration as a single QRoutine
+    grover = grover_iter(n, k, m, n_qubits_sum, target_sum, sorted_values)
 
-    # Initial state preparation: |0> -> |psi> = VBE * Dicke |0>
-    prw.apply(qrw_prep, dicke, node_s_ones, node_s_zeros)
-
-    # =====================================================================
-    # AMPLITUDE AMPLIFICATION LOOP (Grover-style on VBE graph state)
-    # Each iteration applies: D * O where D = U_prep (2|0><0|-I) U_prep^dag
-    # Repeats O(sqrt(C(n,k))) times for optimal probability amplification
-    # =====================================================================
+    # === AMPLITUDE AMPLIFICATION LOOP ===
+    # State starts at |0>. Each grover iteration applies:
+    #   U_prep -> Oracle -> U_prep^dag -> Z_0
     n_external_iters = int(np.ceil(np.sqrt(comb(n, k))))
     for _ in range(n_external_iters):
+        prw.apply(grover, dicke, node_s_ones, node_s_zeros, sum_reg)
 
-        # --- STEP 1: Oracle ---
-        # Flips the phase of subsets whose sum equals the target.
-        qf_ora = oracle(n, k, m, n_qubits_sum, target_sum)
-        prw.apply(qf_ora, node_s_ones, sum_reg)
-
-        # --- STEP 2: Diffuser (2|psi><psi| - I) ---
-        # Step 2a: Undo preparation -> maps state back to computational basis
-        prw.apply(qrw_prep.dag(), dicke, node_s_ones, node_s_zeros)
-
-        # Step 2b: Phase Inversion around |0> (conditional phase flip)
-        for j in range(n):
-            prw.apply(X, dicke[j])
-        prw.apply(Z.ctrl(n - 1), dicke)
-        for j in range(n):
-            prw.apply(X, dicke[j])
-
-        # Step 2c: Re-apply preparation -> maps back to VBE basis
-        prw.apply(qrw_prep, dicke, node_s_ones, node_s_zeros)
+    # Final preparation: map from computational basis to VBE basis for measurement
+    prw.apply(generate(n, k), dicke)
+    prw.apply(bix.bix_matrix_compile_time(n, 1, m, k, sorted_values),
+              dicke, node_s_ones, node_s_zeros)
 
     print("Program qubits")  # Console printout for debugging
     for k, v in prw._qregnames_to_properties.items():  # Loop through all allocated named quantum registers
