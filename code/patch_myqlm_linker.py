@@ -95,97 +95,94 @@ def inspect_module(modules):
 
 def create_monkey_patch():
     """
-    Create a monkey-patch for the myQLM linker.
+    Monkey-patch _merge_dictionaries to handle anonymous gate name collisions.
     
-    The root cause: when the linker processes a circuit containing both
-    a @build_gate gate and its .dag(), the internal anonymous sub-gates
-    (named _1, _2, etc.) collide because the forward and reversed versions
-    use the same internal names but with different definitions.
+    Root cause: when the linker processes both forward and .dag() versions
+    of a @build_gate gate, internal anonymous sub-gates (_1, _2, etc.) 
+    collide because both versions use the same names with different definitions.
     
-    Fix: modify _merge_dictionaries to handle conflicts by renaming
-    colliding anonymous gates instead of raising KeyError.
+    Fix: patch _merge_dictionaries to rename colliding keys instead of crashing.
     """
     import qat.core.linking.util as core_util
     
-    # Save original function
-    original_update_dictionary = core_util.update_dictionary
+    original_merge = core_util._merge_dictionaries
     
-    def patched_update_dictionary(circuit, gate_dic, sub_circuit, prefix=""):
+    def patched_merge_dictionaries(gate_dic_1, gate_dic_2, full_var_dic=None):
         """
-        Patched version that handles anonymous gate name collisions
-        by renaming conflicting gates with a unique prefix.
+        Patched version: if a key collision occurs, rename the conflicting
+        gate in gate_dic_2 before merging.
         """
-        # Strategy: catch KeyError from _merge_dictionaries and 
-        # rename conflicting gates in the sub_circuit before merging.
         try:
-            return original_update_dictionary(circuit, gate_dic, sub_circuit, prefix)
+            return original_merge(gate_dic_1, gate_dic_2, full_var_dic)
         except KeyError as e:
-            # The KeyError means an anonymous gate name collision.
-            # We need to rename the colliding gates in the sub_circuit.
+            # Gate name collision detected - rename conflicting gates in dic_2
             conflicting_key = str(e).strip("'\"")
-            print(f"[PATCH] Resolving gate name collision for '{conflicting_key}'")
             
-            # Rename all anonymous gates in the sub_circuit to avoid collision
-            _rename_anonymous_gates(sub_circuit, gate_dic)
+            # Find all existing anonymous gate names in dic_1
+            existing_names = set()
+            max_idx = 0
+            if gate_dic_1:
+                for name in gate_dic_1:
+                    existing_names.add(name)
+                    if isinstance(name, str) and name.startswith('_') and name[1:].isdigit():
+                        max_idx = max(max_idx, int(name[1:]))
             
-            # Retry with renamed gates
-            return original_update_dictionary(circuit, gate_dic, sub_circuit, prefix)
-    
-    def _rename_anonymous_gates(sub_circuit, existing_dict):
-        """Rename anonymous gates in sub_circuit that conflict with existing_dict."""
-        if not hasattr(sub_circuit, 'gate_set') or sub_circuit.gate_set is None:
-            return
-        
-        # Find the maximum anonymous index in existing dict
-        max_idx = 0
-        all_existing_names = set()
-        if existing_dict:
-            for name in existing_dict:
-                all_existing_names.add(name)
-                if name.startswith('_') and name[1:].isdigit():
-                    max_idx = max(max_idx, int(name[1:]))
-        
-        # Build rename map for conflicting anonymous gates
-        rename_map = {}
-        if hasattr(sub_circuit.gate_set, 'items'):
-            for name in list(sub_circuit.gate_set.keys()):
-                if name in all_existing_names and name.startswith('_'):
-                    max_idx += 1
-                    new_name = f"_{max_idx}"
-                    while new_name in all_existing_names:
+            # Also add dic_2 names
+            if gate_dic_2:
+                for name in gate_dic_2:
+                    if isinstance(name, str) and name.startswith('_') and name[1:].isdigit():
+                        max_idx = max(max_idx, int(name[1:]))
+            
+            # Build a rename map for ALL potentially conflicting anonymous gates in dic_2
+            rename_map = {}
+            if gate_dic_2:
+                for name in list(gate_dic_2.keys()):
+                    if name in existing_names:
                         max_idx += 1
                         new_name = f"_{max_idx}"
-                    rename_map[name] = new_name
-        
-        if not rename_map:
-            return
-        
-        print(f"[PATCH] Renaming gates: {rename_map}")
-        
-        # Apply renames to gate_set
-        new_gate_set = {}
-        for name, gate in sub_circuit.gate_set.items():
-            new_name = rename_map.get(name, name)
-            new_gate_set[new_name] = gate
-        
-        # Replace gate_set
-        # Try dict-like replacement
-        try:
-            sub_circuit.gate_set.clear()
-            sub_circuit.gate_set.update(new_gate_set)
-        except (AttributeError, TypeError):
-            # If it's a protobuf map, try different approach
-            pass
-        
-        # Apply renames to gate references in the circuit ops
-        if hasattr(sub_circuit, 'ops'):
-            for op in sub_circuit.ops:
-                if hasattr(op, 'gate') and op.gate in rename_map:
-                    op.gate = rename_map[op.gate]
+                        while new_name in existing_names or new_name in rename_map.values():
+                            max_idx += 1
+                            new_name = f"_{max_idx}"
+                        rename_map[name] = new_name
+            
+            if not rename_map:
+                raise  # Re-raise if we can't fix it
+            
+            # Apply renames to gate_dic_2: create new dict with renamed keys
+            new_dic_2 = type(gate_dic_2)() if hasattr(type(gate_dic_2), '__call__') else {}
+            for name in list(gate_dic_2.keys()):
+                new_name = rename_map.get(name, name)
+                new_dic_2[new_name] = gate_dic_2[name]
+                
+                # Also rename internal references within the gate definition
+                gate_def = gate_dic_2[name]
+                if hasattr(gate_def, 'circuit') and gate_def.circuit is not None:
+                    for op in gate_def.circuit.ops:
+                        if hasattr(op, 'gate') and op.gate in rename_map:
+                            op.gate = rename_map[op.gate]
+                        # Handle nested gate_set references  
+                    if hasattr(gate_def.circuit, 'gate_set') and gate_def.circuit.gate_set:
+                        nested_renames = {}
+                        for gname in list(gate_def.circuit.gate_set.keys()):
+                            if gname in rename_map:
+                                nested_renames[gname] = rename_map[gname]
+                        for old, new in nested_renames.items():
+                            if old in gate_def.circuit.gate_set:
+                                gate_def.circuit.gate_set[new] = gate_def.circuit.gate_set[old]
+                                del gate_def.circuit.gate_set[old]
+            
+            # Clear dic_2 and repopulate with renamed entries
+            keys_to_remove = list(gate_dic_2.keys())
+            for k in keys_to_remove:
+                del gate_dic_2[k]
+            for k, v in new_dic_2.items():
+                gate_dic_2[k] = v
+            
+            # Retry the merge
+            return original_merge(gate_dic_1, gate_dic_2, full_var_dic)
     
-    # Apply the monkey-patch
-    core_util.update_dictionary = patched_update_dictionary
-    print("[PATCH] Successfully patched qat.core.linking.util.update_dictionary")
+    core_util._merge_dictionaries = patched_merge_dictionaries
+    print("[PATCH] Successfully patched qat.core.linking.util._merge_dictionaries")
     return True
 
 
