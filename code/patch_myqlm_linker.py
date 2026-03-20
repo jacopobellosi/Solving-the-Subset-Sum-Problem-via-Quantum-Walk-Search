@@ -149,7 +149,7 @@ def create_monkey_patch():
         if visited is None:
             visited = set()
         
-        for name in list(gate_dic.keys()):
+        for name in list(gate_dic):
             gate_def = gate_dic[name]
             gd_id = id(gate_def)
             if gd_id in visited:
@@ -164,7 +164,7 @@ def create_monkey_patch():
                     prefix = f"_u{_counter[0]}"
                     
                     rename_map = {}
-                    for sub_name in list(circ.gate_set.keys()):
+                    for sub_name in list(circ.gate_set):
                         if (isinstance(sub_name, str) and sub_name.startswith('_') 
                             and not sub_name.startswith('_u')):
                             new_name = f"{prefix}{sub_name}"
@@ -173,8 +173,8 @@ def create_monkey_patch():
                     if rename_map:
                         # Rebuild gate_set with new names
                         items = [(rename_map.get(k, k), circ.gate_set[k]) 
-                                 for k in list(circ.gate_set.keys())]
-                        for k in list(circ.gate_set.keys()):
+                                 for k in list(circ.gate_set)]
+                        for k in list(circ.gate_set):
                             del circ.gate_set[k]
                         for k, v in items:
                             circ.gate_set[k] = v
@@ -222,15 +222,15 @@ def create_monkey_patch():
         prefix = f"_u{_counter[0]}"
         if subcircuit_gate_dic:
             rename_map = {}
-            for name in list(subcircuit_gate_dic.keys()):
+            for name in list(subcircuit_gate_dic):
                 if (isinstance(name, str) and name.startswith('_')
                     and not name.startswith('_u')):
                     new_name = f"{prefix}{name}"
                     rename_map[name] = new_name
             if rename_map:
                 items = [(rename_map.get(k, k), subcircuit_gate_dic[k]) 
-                         for k in list(subcircuit_gate_dic.keys())]
-                for k in list(subcircuit_gate_dic.keys()):
+                         for k in list(subcircuit_gate_dic)]
+                for k in list(subcircuit_gate_dic):
                     del subcircuit_gate_dic[k]
                 for k, v in items:
                     subcircuit_gate_dic[k] = v
@@ -241,8 +241,8 @@ def create_monkey_patch():
                                     op.gate = rename_map[op.gate]
                         if hasattr(v.circuit, 'gate_set') and v.circuit.gate_set:
                             nested_items = [(rename_map.get(g, g), v.circuit.gate_set[g])
-                                           for g in list(v.circuit.gate_set.keys())]
-                            for g in list(v.circuit.gate_set.keys()):
+                                           for g in list(v.circuit.gate_set)]
+                            for g in list(v.circuit.gate_set):
                                 del v.circuit.gate_set[g]
                             for g, gv in nested_items:
                                 v.circuit.gate_set[g] = gv
