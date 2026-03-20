@@ -194,55 +194,48 @@ def main(n,
     # sum_reg = Support "sum" register for the CSSP target sums
     sum_reg = prw.qarray_alloc(1, n_qubits_sum, "sum", int)
 
-    # =====================================================================
-    # INPUT PREPARATION OPERATOR (U_v) - Section "Input preparation U_v" (Sec II-C)
-    # =====================================================================
-    
-    # Paper Step 1: "Dicke state". Generate the |D^n_k> state.
-    # This is a uniform superposition of all n-length bitstrings with 
-    # Hamming weight equal to k. Stored on register \sigma (here called 'dicke').
+    # Pre-instantiate the preparation gates (Dicke state + VBE encoding)
     dicke_gate = generate(n, k)
-    prw.apply(dicke_gate, dicke)
-    
-    # Paper Step 2: "Vertex Binary Encoding (VBE)".
-    # Reads the \sigma sequence (dicke state) as control indices.
-    # Stores the elements of subset S into k distinct cells in increasing order
-    # within the 'node_s_ones' register, and the complement subset S' into 'node_s_zeros'.
-    # This invokes bix_matrix_compile_time, which internally handles the C-xi and C-SHIFT gates.
     bix_gate = bix.bix_matrix_compile_time(n, 1, m, k, sorted_values)
-    prw.apply(bix_gate, dicke,
-              node_s_ones, node_s_zeros)
 
     # =====================================================================
-    # MAIN MNRS AMPLITUDE AMPLIFICATION ALGORITHMIC LOOP
-    # Repeats the Grover + Szegedy architecture O(1 / sqrt(epsilon)) times
+    # MAIN AMPLITUDE AMPLIFICATION LOOP (Grover-style on VBE graph state)
+    # Each iteration: U_prep -> Oracle -> U_prep^dag -> Z_0
+    # Repeats O(sqrt(C(n,k))) times for optimal probability amplification
     # =====================================================================
-    # n_external_iters is the parameter O(1/\sqrt{\epsilon}) calculated via binomial n over k
     n_external_iters = int(np.ceil(np.sqrt(comb(n, k))))
     for _ in range(n_external_iters):
-    
-        # 1. ORACLE U_ref^\perp(v*) - Calls the phase inversion function on marked (solution) vertices
-        qf_ora = oracle(n, k, m, n_qubits_sum, target_sum)  # Instantiate the Oracle operator U_f with target p
-        prw.apply(qf_ora, node_s_ones, sum_reg)  # Apply the Phase Flip U_f on the current subset S
 
-        # 2. DIFFUSER: Reflection around the initial state |psi_0> = VBE * Dicke |0>
-        # Instead of compute/uncompute (which causes myQLM linker conflicts with nested .dag()),
-        # we manually apply: U_prep^dag -> Z_0 -> U_prep
-        
-        # Step A: Uncompute VBE + Dicke to map back to |0...0>
-        prw.apply(bix_gate.dag(), dicke, node_s_ones, node_s_zeros)
-        prw.apply(dicke_gate.dag(), dicke)
+        # --- STEP 1: Prepare state inside compute() block ---
+        # compute() records the operations AND applies them forward.
+        # Later, uncompute() will automatically reverse them (apply .dag())
+        # without us ever calling .dag() explicitly (which crashes myQLM's linker).
+        with prw.compute():
+            prw.apply(dicke_gate, dicke)
+            prw.apply(bix_gate, dicke, node_s_ones, node_s_zeros)
 
-        # Step B: Phase Inversion around |0> (conditional phase flip on the all-zero state)
+        # --- STEP 2: Oracle ---
+        # At this point the state is in the VBE basis: |psi> = VBE * Dicke |0>
+        # The oracle flips the phase of subsets whose sum equals the target.
+        qf_ora = oracle(n, k, m, n_qubits_sum, target_sum)
+        prw.apply(qf_ora, node_s_ones, sum_reg)
+
+        # --- STEP 3: Undo preparation ---
+        # uncompute() applies bix_gate^dag then dicke_gate^dag automatically.
+        # State returns to computational basis |0...0> (with phase info preserved).
+        prw.uncompute()
+
+        # --- STEP 4: Phase Inversion around |0> (Z_0 reflection) ---
+        # Flips the phase of the |0...0> component: (2|0><0| - I)
         for j in range(n):
             prw.apply(X, dicke[j])
         prw.apply(Z.ctrl(n - 1), dicke)
         for j in range(n):
             prw.apply(X, dicke[j])
 
-        # Step C: Recompute Dicke + VBE to restore the working basis
-        prw.apply(dicke_gate, dicke)
-        prw.apply(bix_gate, dicke, node_s_ones, node_s_zeros)
+    # After the loop, re-apply the preparation for measurement
+    prw.apply(dicke_gate, dicke)
+    prw.apply(bix_gate, dicke, node_s_ones, node_s_zeros)
 
     print("Program qubits")  # Console printout for debugging
     for k, v in prw._qregnames_to_properties.items():  # Loop through all allocated named quantum registers
