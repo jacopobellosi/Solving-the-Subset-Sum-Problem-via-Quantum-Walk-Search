@@ -155,6 +155,27 @@ def oracle(n, k, m, n_qubits_sum, target_value):
 
 
 # =====================================================================
+# U_PREP OPERATOR (State Preparation)
+# Wraps Dicke state generation + VBE encoding into a single QRoutineWrapper.
+# This allows calling .dag() safely (QRoutineWrapper.dag() works with
+# myQLM's linker, unlike @build_gate decorated functions which crash).
+# =====================================================================
+def prepare_state(n, k, m, sorted_values):
+    qrw = QRoutineWrapper(QRoutine())
+    dicke = qrw.qarray_wires(n, 1, "dicke", str)
+    node_s_ones = qrw.qarray_wires(k, m, "s_1", int)
+    node_s_zeros = qrw.qarray_wires(n - k, m, "s_0", int)
+
+    # Step 1: Generate Dicke state |D^n_k> on the sigma register
+    qrw.apply(generate(n, k), dicke)
+    # Step 2: Vertex Binary Encoding - maps Dicke indices to actual data values
+    qrw.apply(bix.bix_matrix_compile_time(n, 1, m, k, sorted_values),
+              dicke, node_s_ones, node_s_zeros)
+
+    return qrw
+
+
+# =====================================================================
 # MAIN - Global construction of the MNRS Quantum Walk Search
 # Assembles all parts of the paper to solve the CSSP (Subset Sum Problem)
 # =====================================================================
@@ -164,78 +185,55 @@ def main(n,
          target_sum: int,
          low_width=True,
          to_simulate=False):
-         
-    # If low-width is True, "insert_lw" is used (minimizes ancillary qubits). 
-    # Otherwise "insert_ld" is used (minimizes circuit depth but uses more qubits). Sec III-D "Insertion and deletion"
-    insert = insert_lw if low_width else insert_ld
-    
-    # m = number of bits required to encode the maximum value in the set (Sec III Introduction)
+
+    # m = number of bits required to encode the maximum value in the set
     m = max(values).bit_length()
-    
-    # delta = Theoretical spectral gap of the Johnson Graph (Sec II-D, page 169)
-    delta = n / (k * (n - k))
-    
-    # len_s = Number of Quantum Phase Estimation (QPE) steps based on O(1/\sqrt{\delta})
-    len_s = int(np.ceil(np.log2(np.pi / (2 * np.sqrt(delta)))))
-    
+
     # n_qubits_sum = Number of qubits needed to safely hold the sum of k integers without overflow
     n_qubits_sum = int(np.ceil(np.log2(k))) + m
 
     sorted_values = sorted(values)
     prw = ProgramWrapper(Program())
-    
-    # === ALLOCATION OF REGISTERS DESCRIBED IN TABLE I ===
-    # dicke = \sigma Register 
+
+    # === ALLOCATION OF REGISTERS ===
     dicke = prw.qarray_alloc(n, 1, "dicke", str)
-    # node_s_ones = S Register
     node_s_ones = prw.qarray_alloc(k, m, "s_1", int)
-    # node_s_zeros = S' Register
     node_s_zeros = prw.qarray_alloc(n - k, m, "s_0", int)
-    # sum_reg = Support "sum" register for the CSSP target sums
     sum_reg = prw.qarray_alloc(1, n_qubits_sum, "sum", int)
 
-    # Pre-instantiate the preparation gates (Dicke state + VBE encoding)
-    dicke_gate = generate(n, k)
-    bix_gate = bix.bix_matrix_compile_time(n, 1, m, k, sorted_values)
+    # Instantiate preparation operator as a QRoutineWrapper
+    # (QRoutineWrapper.dag() works with myQLM linker, unlike @build_gate.dag())
+    qrw_prep = prepare_state(n, k, m, sorted_values)
+
+    # Initial state preparation: |0> -> |psi> = VBE * Dicke |0>
+    prw.apply(qrw_prep, dicke, node_s_ones, node_s_zeros)
 
     # =====================================================================
-    # MAIN AMPLITUDE AMPLIFICATION LOOP (Grover-style on VBE graph state)
-    # Each iteration: U_prep -> Oracle -> U_prep^dag -> Z_0
+    # AMPLITUDE AMPLIFICATION LOOP (Grover-style on VBE graph state)
+    # Each iteration applies: D * O where D = U_prep (2|0><0|-I) U_prep^dag
     # Repeats O(sqrt(C(n,k))) times for optimal probability amplification
     # =====================================================================
     n_external_iters = int(np.ceil(np.sqrt(comb(n, k))))
     for _ in range(n_external_iters):
 
-        # --- STEP 1: Prepare state inside compute() block ---
-        # compute() records the operations AND applies them forward.
-        # Later, uncompute() will automatically reverse them (apply .dag())
-        # without us ever calling .dag() explicitly (which crashes myQLM's linker).
-        with prw.compute():
-            prw.apply(dicke_gate, dicke)
-            prw.apply(bix_gate, dicke, node_s_ones, node_s_zeros)
-
-        # --- STEP 2: Oracle ---
-        # At this point the state is in the VBE basis: |psi> = VBE * Dicke |0>
-        # The oracle flips the phase of subsets whose sum equals the target.
+        # --- STEP 1: Oracle ---
+        # Flips the phase of subsets whose sum equals the target.
         qf_ora = oracle(n, k, m, n_qubits_sum, target_sum)
         prw.apply(qf_ora, node_s_ones, sum_reg)
 
-        # --- STEP 3: Undo preparation ---
-        # uncompute() applies bix_gate^dag then dicke_gate^dag automatically.
-        # State returns to computational basis |0...0> (with phase info preserved).
-        prw.uncompute()
+        # --- STEP 2: Diffuser (2|psi><psi| - I) ---
+        # Step 2a: Undo preparation -> maps state back to computational basis
+        prw.apply(qrw_prep.dag(), dicke, node_s_ones, node_s_zeros)
 
-        # --- STEP 4: Phase Inversion around |0> (Z_0 reflection) ---
-        # Flips the phase of the |0...0> component: (2|0><0| - I)
+        # Step 2b: Phase Inversion around |0> (conditional phase flip)
         for j in range(n):
             prw.apply(X, dicke[j])
         prw.apply(Z.ctrl(n - 1), dicke)
         for j in range(n):
             prw.apply(X, dicke[j])
 
-    # After the loop, re-apply the preparation for measurement
-    prw.apply(dicke_gate, dicke)
-    prw.apply(bix_gate, dicke, node_s_ones, node_s_zeros)
+        # Step 2c: Re-apply preparation -> maps back to VBE basis
+        prw.apply(qrw_prep, dicke, node_s_ones, node_s_zeros)
 
     print("Program qubits")  # Console printout for debugging
     for k, v in prw._qregnames_to_properties.items():  # Loop through all allocated named quantum registers
