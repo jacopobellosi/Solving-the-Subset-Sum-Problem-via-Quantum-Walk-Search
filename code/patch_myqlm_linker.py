@@ -95,92 +95,136 @@ def inspect_module(modules):
 
 def create_monkey_patch():
     """
-    Patch update_dictionary to PREVENT gate name collisions by pre-renaming
-    all anonymous gates in each subcircuit with unique prefixes BEFORE merging.
+    Patch at the highest possible level to prevent gate name collisions.
     
-    The Cython _merge_dictionaries._insert crashes when the same anonymous
-    gate name (_1, _2, etc.) exists in both dictionaries with different
-    definitions. By giving each subcircuit's anonymous gates globally unique
-    names, collisions become impossible.
+    Strategy: Patch `link_gates` in `qat.lang.linking.util` (the entry point
+    called by `Linker.link`). Before calling the original, we pre-process
+    the circuit's entire gate dictionary to make all anonymous gate names
+    globally unique, preventing any collision in the Cython merge code.
     """
+    import qat.lang.linking.util as lang_util
     import qat.core.linking.util as core_util
     
-    original_update_dictionary = core_util.update_dictionary
-    _call_counter = [0]
+    original_link_gates = lang_util.link_gates
+    _counter = [0]
     
-    def _rename_anonymous_recursive(gate_dic, prefix):
+    def _make_all_anonymous_unique(gate_dic, visited=None):
         """
-        Recursively rename all anonymous gates (_N) in a gate dictionary
-        to use a unique prefix (e.g., _N -> _p3_N).
-        Returns the rename map applied at this level.
+        Walk the ENTIRE gate dictionary tree and rename all anonymous
+        gates to globally unique names. This must happen BEFORE any
+        Cython merge code runs.
         """
         if not gate_dic:
-            return {}
+            return
+        if visited is None:
+            visited = set()
         
-        # Build rename map for this level
-        rename_map = {}
-        for name in list(gate_dic.keys()):
-            if isinstance(name, str) and name.startswith('_') and not name.startswith('_p'):
-                new_name = f"{prefix}{name}"
-                rename_map[name] = new_name
-        
-        if not rename_map:
-            return {}
-        
-        # Apply renames: rebuild the dictionary with new keys
-        items = []
-        for name in list(gate_dic.keys()):
-            new_name = rename_map.get(name, name)
-            items.append((new_name, gate_dic[name]))
-        
-        # Clear and repopulate
-        for k in list(gate_dic.keys()):
-            del gate_dic[k]
-        for k, v in items:
-            gate_dic[k] = v
-        
-        # Update internal references in each gate definition
         for name in list(gate_dic.keys()):
             gate_def = gate_dic[name]
+            gd_id = id(gate_def)
+            if gd_id in visited:
+                continue
+            visited.add(gd_id)
+            
             if hasattr(gate_def, 'circuit') and gate_def.circuit is not None:
                 circ = gate_def.circuit
-                # Rename op references
-                if hasattr(circ, 'ops'):
-                    for op in circ.ops:
-                        if hasattr(op, 'gate') and op.gate in rename_map:
-                            op.gate = rename_map[op.gate]
-                # Recursively rename nested gate_set
                 if hasattr(circ, 'gate_set') and circ.gate_set:
-                    nested_map = _rename_anonymous_recursive(circ.gate_set, prefix)
-                    # Update ops with nested renames too
-                    if nested_map and hasattr(circ, 'ops'):
-                        for op in circ.ops:
-                            if hasattr(op, 'gate') and op.gate in nested_map:
-                                op.gate = nested_map[op.gate]
-            
-            # Handle syntax references if present
-            if hasattr(gate_def, 'syntax') and gate_def.syntax is not None:
-                if hasattr(gate_def.syntax, 'name') and gate_def.syntax.name in rename_map:
-                    gate_def.syntax.name = rename_map[gate_def.syntax.name]
-        
-        return rename_map
+                    # Rename anonymous gates in this sub-circuit
+                    _counter[0] += 1
+                    prefix = f"_u{_counter[0]}"
+                    
+                    rename_map = {}
+                    for sub_name in list(circ.gate_set.keys()):
+                        if (isinstance(sub_name, str) and sub_name.startswith('_') 
+                            and not sub_name.startswith('_u')):
+                            new_name = f"{prefix}{sub_name}"
+                            rename_map[sub_name] = new_name
+                    
+                    if rename_map:
+                        # Rebuild gate_set with new names
+                        items = [(rename_map.get(k, k), circ.gate_set[k]) 
+                                 for k in list(circ.gate_set.keys())]
+                        for k in list(circ.gate_set.keys()):
+                            del circ.gate_set[k]
+                        for k, v in items:
+                            circ.gate_set[k] = v
+                        
+                        # Update op references
+                        if hasattr(circ, 'ops'):
+                            for op in circ.ops:
+                                if hasattr(op, 'gate') and op.gate in rename_map:
+                                    op.gate = rename_map[op.gate]
+                    
+                    # Recurse into sub-gate definitions
+                    _make_all_anonymous_unique(circ.gate_set, visited)
     
-    def patched_update_dictionary(circuit, subcircuit_gate_dic):
+    def patched_link_gates(circuit, *args, **kwargs):
         """
-        Pre-rename all anonymous gates in the subcircuit to prevent
-        collisions with the circuit's gate dictionary.
+        Pre-process the circuit to make all anonymous gate names unique,
+        then call the original link_gates.
         """
-        _call_counter[0] += 1
-        prefix = f"_p{_call_counter[0]}"
-        
-        # Only rename if there could be conflicts
-        if circuit.gate_set and subcircuit_gate_dic:
-            _rename_anonymous_recursive(subcircuit_gate_dic, prefix)
-        
-        return original_update_dictionary(circuit, subcircuit_gate_dic)
+        if hasattr(circuit, 'gate_set') and circuit.gate_set:
+            _make_all_anonymous_unique(circuit.gate_set)
+        return original_link_gates(circuit, *args, **kwargs)
     
-    core_util.update_dictionary = patched_update_dictionary
-    print("[PATCH] Successfully patched qat.core.linking.util.update_dictionary")
+    # Patch link_gates at the module level
+    lang_util.link_gates = patched_link_gates
+    
+    # Also try to patch the reference used by Linker.link_gates (the class method)
+    try:
+        import qat.lang.linking.linker as linker_mod
+        original_linker_link_gates = linker_mod.Linker.link_gates
+        
+        def patched_linker_link_gates(self, circuit, *args, **kwargs):
+            if hasattr(circuit, 'gate_set') and circuit.gate_set:
+                _make_all_anonymous_unique(circuit.gate_set)
+            return original_linker_link_gates(self, circuit, *args, **kwargs)
+        
+        linker_mod.Linker.link_gates = patched_linker_link_gates
+        print("[PATCH] Patched Linker.link_gates")
+    except Exception as e:
+        print(f"[PATCH] Could not patch Linker.link_gates: {e}")
+    
+    # Also patch update_dictionary in BOTH modules
+    original_update_dict = core_util.update_dictionary
+    def patched_update_dict(circuit, subcircuit_gate_dic):
+        _counter[0] += 1
+        prefix = f"_u{_counter[0]}"
+        if subcircuit_gate_dic:
+            rename_map = {}
+            for name in list(subcircuit_gate_dic.keys()):
+                if (isinstance(name, str) and name.startswith('_')
+                    and not name.startswith('_u')):
+                    new_name = f"{prefix}{name}"
+                    rename_map[name] = new_name
+            if rename_map:
+                items = [(rename_map.get(k, k), subcircuit_gate_dic[k]) 
+                         for k in list(subcircuit_gate_dic.keys())]
+                for k in list(subcircuit_gate_dic.keys()):
+                    del subcircuit_gate_dic[k]
+                for k, v in items:
+                    subcircuit_gate_dic[k] = v
+                    if hasattr(v, 'circuit') and v.circuit is not None:
+                        if hasattr(v.circuit, 'ops'):
+                            for op in v.circuit.ops:
+                                if hasattr(op, 'gate') and op.gate in rename_map:
+                                    op.gate = rename_map[op.gate]
+                        if hasattr(v.circuit, 'gate_set') and v.circuit.gate_set:
+                            nested_items = [(rename_map.get(g, g), v.circuit.gate_set[g])
+                                           for g in list(v.circuit.gate_set.keys())]
+                            for g in list(v.circuit.gate_set.keys()):
+                                del v.circuit.gate_set[g]
+                            for g, gv in nested_items:
+                                v.circuit.gate_set[g] = gv
+        return original_update_dict(circuit, subcircuit_gate_dic)
+    
+    core_util.update_dictionary = patched_update_dict
+    # Try to also patch the lang module's reference
+    if hasattr(lang_util, 'update_dictionary'):
+        lang_util.update_dictionary = patched_update_dict
+    
+    print("[PATCH] Patched update_dictionary in core and lang modules")
+    print("[PATCH] All patches applied successfully")
     return True
 
 
