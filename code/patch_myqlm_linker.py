@@ -91,6 +91,36 @@ def inspect_module(modules):
             print(f"\nSearching for source files in {pkg_dir}:")
             for f in os.listdir(pkg_dir):
                 print(f"  {f}")
+    
+    # Inspect GateSet type
+    print("\n=== Inspecting GateSet type ===")
+    try:
+        from qat.comm.datamodel.ttypes import GateDictionary
+        gs = GateDictionary()
+        print(f"GateDictionary type: {type(gs)}")
+        print(f"GateDictionary dir: {[x for x in dir(gs) if not x.startswith('__')]}")
+    except ImportError:
+        pass
+    
+    try:
+        # Build a tiny circuit to inspect its gate_set type
+        from qat.lang.AQASM import Program
+        from qat.lang.AQASM.gates import H
+        p = Program()
+        q = p.qalloc(1)
+        p.apply(H, q)
+        c = p.to_circ()
+        print(f"\nCircuit.gate_set type: {type(c.gate_set)}")
+        print(f"gate_set dir: {[x for x in dir(c.gate_set) if not x.startswith('__')]}")
+        print(f"gate_set len: {len(c.gate_set) if hasattr(c.gate_set, '__len__') else 'N/A'}")
+        if hasattr(c.gate_set, '__iter__'):
+            print(f"gate_set iterable: True")
+            for name in c.gate_set:
+                print(f"  gate name: {name}, type: {type(name)}")
+        if hasattr(c.gate_set, '__getitem__'):
+            print(f"gate_set subscriptable: True")
+    except Exception as e:
+        print(f"Error inspecting: {e}")
 
 
 def create_monkey_patch():
