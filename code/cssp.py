@@ -191,27 +191,8 @@ def main(n,
     node_s_ones = prw.qarray_alloc(k, m, "s_1", int)
     # node_s_zeros = S' Register
     node_s_zeros = prw.qarray_alloc(n - k, m, "s_0", int)
-    # node_t_ones = T Register
-    node_t_ones = prw.qarray_alloc(k, m, "t_1", int)
-    # node_t_zeros = T' Register
-    node_t_zeros = prw.qarray_alloc(n - k, m, "t_0", int)
-    # alpha_ones = \alpha Register
-    alpha_ones = prw.qarray_alloc(1, m, "a_1", int)
-    # alpha_zeros = \alpha' Register
-    alpha_zeros = prw.qarray_alloc(1, m, "a_0", int)
-    # wstate_ones = \omega Register
-    wstate_ones = prw.qarray_alloc(k, 1, "w_1", str)
-    # wstate_zeros = \omega' Register
-    wstate_zeros = prw.qarray_alloc(n - k, 1, "w_0", str)
-
-    # qpe_s = Support register used for the Approximate Reflection U_ref(E)
-    qpe_s = prw.qarray_alloc(len_s, 1, "qpe_s", str)
     # sum_reg = Support "sum" register for the CSSP target sums
     sum_reg = prw.qarray_alloc(1, n_qubits_sum, "sum", int)
-    
-    # Initialize the QPE support with Hadamard gates (creates a 50/50 superposition on logical channels)
-    for qb in qpe_s:
-        prw.apply(H, qb)
 
     # =====================================================================
     # INPUT PREPARATION OPERATOR (U_v) - Section "Input preparation U_v" (Sec II-C)
@@ -220,20 +201,17 @@ def main(n,
     # Paper Step 1: "Dicke state". Generate the |D^n_k> state.
     # This is a uniform superposition of all n-length bitstrings with 
     # Hamming weight equal to k. Stored on register \sigma (here called 'dicke').
-    prw.apply(generate(n, k), dicke)
+    dicke_gate = generate(n, k)
+    prw.apply(dicke_gate, dicke)
     
     # Paper Step 2: "Vertex Binary Encoding (VBE)".
     # Reads the \sigma sequence (dicke state) as control indices.
     # Stores the elements of subset S into k distinct cells in increasing order
     # within the 'node_s_ones' register, and the complement subset S' into 'node_s_zeros'.
     # This invokes bix_matrix_compile_time, which internally handles the C-xi and C-SHIFT gates.
-    prw.apply(bix.bix_matrix_compile_time(n, 1, m, k, sorted_values), dicke,
+    bix_gate = bix.bix_matrix_compile_time(n, 1, m, k, sorted_values)
+    prw.apply(bix_gate, dicke,
               node_s_ones, node_s_zeros)
-              
-    # 3) Execute the Update Operator (U_U) a first time to generate the adjacent paths in T and T' (Edge Superposition)
-    qrw_update = update(n, k, m, insert, delete)
-    prw.apply(qrw_update, node_s_ones, node_s_zeros, node_t_ones, node_t_zeros,
-              alpha_ones, alpha_zeros, wstate_ones, wstate_zeros)
 
     # =====================================================================
     # MAIN MNRS AMPLITUDE AMPLIFICATION ALGORITHMIC LOOP
@@ -258,10 +236,10 @@ def main(n,
             # This cleanly circumvents the entanglement leakage left by `alpha` and `omega` while physically amplifying the target.
             
             # 1. Uncompute VBE matrix
-            prw.apply(bix.bix_matrix_compile_time(n, 1, m, k, sorted_values).dag(), dicke,
+            prw.apply(bix_gate.dag(), dicke,
                       node_s_ones, node_s_zeros)
             # 2. Uncompute Dicke state to return to |0...0>
-            prw.apply(generate(n, k).dag(), dicke)
+            prw.apply(dicke_gate.dag(), dicke)
 
             # 3. Phase Inversion around Zero (-Z_0)
             for j in range(n):
