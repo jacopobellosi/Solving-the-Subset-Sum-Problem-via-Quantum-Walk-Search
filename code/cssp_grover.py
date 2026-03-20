@@ -194,12 +194,22 @@ def main(n, k, values, target_sum, to_simulate=False):
     # Step 1: Extract the preparation unitary matrix
     prep_matrix = extract_unitary_simple(n, k, m, sorted_values)
     
-    # Step 2: Create an AbstractGate from the matrix
+    # Step 2: Create AbstractGate with matrix_generator so simulator can use it
     from qat.lang.AQASM.misc import AbstractGate
-    PREP_GATE = AbstractGate("U_PREP", [np.ndarray], 
+    
+    n_prep_q = int(np.log2(prep_matrix.shape[0]))
+    
+    # Forward gate
+    PREP_GATE = AbstractGate("U_PREP", [np.ndarray],
+                             matrix_generator=lambda mat: mat,
                              arity=lambda mat: int(np.log2(mat.shape[0])))
     prep_gate = PREP_GATE(prep_matrix)
-    prep_gate_dag = PREP_GATE(prep_matrix.conj().T)  # Explicit inverse
+    
+    # Inverse gate (separate name to avoid any linker confusion)
+    PREP_DAG_GATE = AbstractGate("U_PREP_DAG", [np.ndarray],
+                                 matrix_generator=lambda mat: mat,
+                                 arity=lambda mat: int(np.log2(mat.shape[0])))
+    prep_gate_dag = PREP_DAG_GATE(prep_matrix.conj().T)
     
     # Step 3: Build the Grover circuit
     prw = ProgramWrapper(Program())
