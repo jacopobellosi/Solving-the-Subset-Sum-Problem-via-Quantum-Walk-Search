@@ -155,47 +155,8 @@ def oracle(n, k, m, n_qubits_sum, target_value):
 
 
 # =====================================================================
-# GROVER ITERATION (Oracle + Diffuser as a single QRoutine)
-# Uses QRoutine-level compute/uncompute (same proven pattern as oracle())
-# to avoid the myQLM linker KeyError on .dag() of @build_gate functions.
-#
-# Mathematical sequence per call (state enters in computational basis):
-#   compute(U_prep) -> Oracle -> uncompute(U_prep^dag) -> Z_0
-# When called N times from |0>, then followed by a final U_prep:
-#   U_prep * [Z_0 * U_prep^dag * O * U_prep]^N |0> = G^N |psi>
-# =====================================================================
-def grover_iter(n, k, m, n_qubits_sum, target_sum, sorted_values):
-    qrw = QRoutineWrapper(QRoutine())
-    dicke = qrw.qarray_wires(n, 1, "dicke", str)
-    node_s_ones = qrw.qarray_wires(k, m, "s_1", int)
-    node_s_zeros = qrw.qarray_wires(n - k, m, "s_0", int)
-    sum_reg = qrw.qarray_wires(1, n_qubits_sum, "sum", int)
-
-    # --- Phase 1: Prepare state (recorded by compute for automatic reversal) ---
-    with qrw.compute():
-        qrw.apply(generate(n, k), dicke)
-        qrw.apply(bix.bix_matrix_compile_time(n, 1, m, k, sorted_values),
-                  dicke, node_s_ones, node_s_zeros)
-
-    # --- Phase 2: Oracle (marks target subsets with phase flip) ---
-    qf_ora = oracle(n, k, m, n_qubits_sum, target_sum)
-    qrw.apply(qf_ora, node_s_ones, sum_reg)
-
-    # --- Phase 3: Undo preparation (automatic .dag() at QRoutine level) ---
-    qrw.uncompute()
-
-    # --- Phase 4: Reflect around |0> ---
-    for j in range(n):
-        qrw.apply(X, dicke[j])
-    qrw.apply(Z.ctrl(n - 1), dicke)
-    for j in range(n):
-        qrw.apply(X, dicke[j])
-
-    return qrw
-
-
-# =====================================================================
-# MAIN - Assembles the Grover search on VBE-encoded Johnson graph
+# MAIN - Global construction of the MNRS Quantum Walk Search
+# Assembles all parts of the paper to solve the CSSP (Subset Sum Problem)
 # =====================================================================
 def main(n,
          k,
@@ -203,32 +164,157 @@ def main(n,
          target_sum: int,
          low_width=True,
          to_simulate=False):
-
+         
+    # If low-width is True, "insert_lw" is used (minimizes ancillary qubits). 
+    # Otherwise "insert_ld" is used (minimizes circuit depth but uses more qubits). Sec III-D "Insertion and deletion"
+    insert = insert_lw if low_width else insert_ld
+    
+    # m = number of bits required to encode the maximum value in the set (Sec III Introduction)
     m = max(values).bit_length()
+    
+    # delta = Theoretical spectral gap of the Johnson Graph (Sec II-D, page 169)
+    delta = n / (k * (n - k))
+    
+    # len_s = Number of Quantum Phase Estimation (QPE) steps based on O(1/\sqrt{\delta})
+    len_s = int(np.ceil(np.log2(np.pi / (2 * np.sqrt(delta)))))
+    
+    # n_qubits_sum = Number of qubits needed to safely hold the sum of k integers without overflow
     n_qubits_sum = int(np.ceil(np.log2(k))) + m
+
     sorted_values = sorted(values)
     prw = ProgramWrapper(Program())
-
-    # === REGISTER ALLOCATION ===
+    
+    # === ALLOCATION OF REGISTERS DESCRIBED IN TABLE I ===
+    # dicke = \sigma Register 
     dicke = prw.qarray_alloc(n, 1, "dicke", str)
+    # node_s_ones = S Register
     node_s_ones = prw.qarray_alloc(k, m, "s_1", int)
+    # node_s_zeros = S' Register
     node_s_zeros = prw.qarray_alloc(n - k, m, "s_0", int)
+    # node_t_ones = T Register
+    node_t_ones = prw.qarray_alloc(k, m, "t_1", int)
+    # node_t_zeros = T' Register
+    node_t_zeros = prw.qarray_alloc(n - k, m, "t_0", int)
+    # alpha_ones = \alpha Register
+    alpha_ones = prw.qarray_alloc(1, m, "a_1", int)
+    # alpha_zeros = \alpha' Register
+    alpha_zeros = prw.qarray_alloc(1, m, "a_0", int)
+    # wstate_ones = \omega Register
+    wstate_ones = prw.qarray_alloc(k, 1, "w_1", str)
+    # wstate_zeros = \omega' Register
+    wstate_zeros = prw.qarray_alloc(n - k, 1, "w_0", str)
+
+    # qpe_s = Support register used for the Approximate Reflection U_ref(E)
+    qpe_s = prw.qarray_alloc(len_s, 1, "qpe_s", str)
+    # sum_reg = Support "sum" register for the CSSP target sums
     sum_reg = prw.qarray_alloc(1, n_qubits_sum, "sum", int)
+    
+    # Initialize the QPE support with Hadamard gates (creates a 50/50 superposition on logical channels)
+    for qb in qpe_s:
+        prw.apply(H, qb)
 
-    # Build the Grover iteration as a single QRoutine
-    grover = grover_iter(n, k, m, n_qubits_sum, target_sum, sorted_values)
+    # =====================================================================
+    # INPUT PREPARATION OPERATOR (U_v) - Section "Input preparation U_v" (Sec II-C)
+    # =====================================================================
+    
+    # Paper Step 1: "Dicke state". Generate the |D^n_k> state.
+    # This is a uniform superposition of all n-length bitstrings with 
+    # Hamming weight equal to k. Stored on register \sigma (here called 'dicke').
+    prw.apply(generate(n, k), dicke)
+    
+    # Paper Step 2: "Vertex Binary Encoding (VBE)".
+    # Reads the \sigma sequence (dicke state) as control indices.
+    # Stores the elements of subset S into k distinct cells in increasing order
+    # within the 'node_s_ones' register, and the complement subset S' into 'node_s_zeros'.
+    # This invokes bix_matrix_compile_time, which internally handles the C-xi and C-SHIFT gates.
+    prw.apply(bix.bix_matrix_compile_time(n, 1, m, k, sorted_values), dicke,
+              node_s_ones, node_s_zeros)
+              
+    # 3) Execute the Update Operator (U_U) a first time to generate the adjacent paths in T and T' (Edge Superposition)
+    qrw_update = update(n, k, m, insert, delete)
+    prw.apply(qrw_update, node_s_ones, node_s_zeros, node_t_ones, node_t_zeros,
+              alpha_ones, alpha_zeros, wstate_ones, wstate_zeros)
 
-    # === AMPLITUDE AMPLIFICATION LOOP ===
-    # State starts at |0>. Each grover iteration applies:
-    #   U_prep -> Oracle -> U_prep^dag -> Z_0
+    # =====================================================================
+    # MAIN MNRS AMPLITUDE AMPLIFICATION ALGORITHMIC LOOP
+    # Repeats the Grover + Szegedy architecture O(1 / sqrt(epsilon)) times
+    # =====================================================================
+    # n_external_iters is the parameter O(1/\sqrt{\epsilon}) calculated via binomial n over k
     n_external_iters = int(np.ceil(np.sqrt(comb(n, k))))
     for _ in range(n_external_iters):
-        prw.apply(grover, dicke, node_s_ones, node_s_zeros, sum_reg)
+    
+        # 1. ORACLE U_ref^\perp(v*) - Calls the phase inversion function on marked (solution) vertices
+        qf_ora = oracle(n, k, m, n_qubits_sum, target_sum)  # Instantiate the Oracle operator U_f with target p
+        prw.apply(qf_ora, node_s_ones, sum_reg)  # Apply the Phase Flip U_f on the current subset S
 
-    # Final preparation: map from computational basis to VBE basis for measurement
-    prw.apply(generate(n, k), dicke)
-    prw.apply(bix.bix_matrix_compile_time(n, 1, m, k, sorted_values),
-              dicke, node_s_ones, node_s_zeros)
+        # 2. APPROXIMATE REFLECTION U_ref(E) - Activates the Szegedy "double reflection" walk
+        with prw.compute():  # Enter a compute block to allow clean uncomputation of the walk later
+            # Repeat the walk application depending on the QPE steps
+            for qw_iter in range(len_s):  # Iterate O(1/\sqrt{\delta}) times for Quantum Phase Estimation
+            
+                # Reflection A (Ref A, on the current node)
+                prw.apply(qrw_update.dag(), node_s_ones, node_s_zeros,  # Apply U_U^\dagger (adjoint Update) to un-superimpose edges
+                          node_t_ones, node_t_zeros, alpha_ones, alpha_zeros,  # Passing all required registers
+                          wstate_ones, wstate_zeros)  # Including the W-states
+                for j in range(k):  # Loop over the k elements of the subset S
+                    prw.apply(X, wstate_ones[j])  # Apply X gates to effectively flip the control condition for the 0 state
+                for j in range(n - k):  # We must ALSO flip the zeros state complement for the reflection projection
+                    prw.apply(X, wstate_zeros[j])
+                prw.apply(Z.ctrl(n), qpe_s[qw_iter], wstate_ones, wstate_zeros)  # Apply a controlled-Z conditioned on the ENTIRE coin state reverting to 0
+                for j in range(k):  # Remove the X gates to restore the original state
+                    prw.apply(X, wstate_ones[j])  
+                for j in range(n - k):  
+                    prw.apply(X, wstate_zeros[j])  
+                prw.apply(qrw_update, node_s_ones, node_s_zeros, node_t_ones,  # Re-apply U_U to recreate the edge superposition (Ref A complete)
+                          node_t_zeros, alpha_ones, alpha_zeros, wstate_ones,  # Passing registers
+                          wstate_zeros)  # Passing registers
+                # Reflection B (Ref B, on the adjacent node, swapping the spatial coordinates)
+                prw.apply(qrw_update.dag(), node_t_ones, node_t_zeros,  # Apply U_U^\dagger but with S and T SWAPPED to reflect on the adjacent vertex
+                          node_s_ones, node_s_zeros, alpha_ones, alpha_zeros,  # Notice how node_t_* takes the place of node_s_*
+                          wstate_ones, wstate_zeros)  # Ancillas remain correctly mapped to their respective k and n-k bounds
+                for j in range(k):  # Loop over the k elements of the subset S
+                    prw.apply(X, wstate_ones[j])  # Apply X gates to flip the control condition
+                for j in range(n - k):  # Flip zeros state complement
+                    prw.apply(X, wstate_zeros[j])
+                prw.apply(Z.ctrl(n), qpe_s[qw_iter], wstate_ones, wstate_zeros)  # Apply the complete controlled-Z phase inversion on the adjacent Reflection B
+                for j in range(k):  # Restore states
+                    prw.apply(X, wstate_ones[j])  # Remove the X gates on the wstate
+                for j in range(n - k):  
+                    prw.apply(X, wstate_zeros[j])  
+                prw.apply(qrw_update, node_t_ones, node_t_zeros, node_s_ones,  # Re-apply the SWAPPED U_U operator to bounce back (Ref B complete)
+                          node_s_zeros, alpha_ones, alpha_zeros, wstate_ones,  # Passing swapped registers
+                          wstate_zeros)  # Passing swapped registersrs
+
+            # Clear memory (Reset) and deallocate the temporary variables \alpha and \omega 
+            # in order to clean up the quantum gate "thermodynamic waste"
+            for j in range(k):  # Loop over the subset S
+                prw.apply(  # Uncompute the C-COPY of elements into \alpha
+                    qregs_init.copy_register(m).ctrl(), wstate_ones[j],  # Triggered by W-state
+                    node_s_ones[j], alpha_ones)  # Deallocate alpha_ones
+            for j in range(n - k):  # Loop over the complement S'
+                prw.apply(  # Uncompute the C-COPY of elements into \alpha'
+                    qregs_init.copy_register(m).ctrl(), wstate_zeros[j],  # Triggered by W-state
+                    node_s_zeros[j], alpha_zeros)  # Deallocate alpha_zeros
+
+            prw.apply(generate(k, 1), wstate_ones)  # Uncompute the generation of W-state |Wk>
+            prw.apply(generate(n - k, 1), wstate_zeros)  # Uncompute the generation of W-state |W(n-k)>
+            
+            # Finally, execute the Quantum Fourier Transform (QFT) to convert phase energy 
+            # into measurable probability for the simulator (we estimate the end of the Walk)
+            prw.apply(QFT(len_s), qpe_s)  # Apply QFT on the Phase Estimation register
+            
+        # 3. DIFFUSION: Inversion about the mean (Reflect results on the center, purely like Grover)
+        for j in range(len_s):  # Iterate over all QPE qubits
+            prw.apply(X, qpe_s[j])  # Apply X gates (NOT) to prepare for zero-state reflection
+        if len_s > 1:  # If we have more than 1 QPE qubit
+            prw.apply(Z.ctrl(len_s - 1), qpe_s)  # Multi-controlled Z gate hitting the zero state
+        else:  # If the QPE is only 1 qubit deep
+            prw.apply(Z, qpe_s)  # Standard Z gate
+        for j in range(len_s):  # Iterate over all QPE qubits again
+            prw.apply(X, qpe_s[j])  # Remove the X gates to restore state with flipped mean
+            
+        # Uncompute for the logical iteration
+        prw.uncompute()  # Collapse the entire compute block, physically reverting the QFT and walks without losing the Grover phase
 
     print("Program qubits")  # Console printout for debugging
     for k, v in prw._qregnames_to_properties.items():  # Loop through all allocated named quantum registers
