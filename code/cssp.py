@@ -240,7 +240,20 @@ def main(n,
     # Repeats the Grover + Szegedy architecture O(1 / sqrt(epsilon)) times
     # =====================================================================
     # n_external_iters is the parameter O(1/\sqrt{\epsilon}) calculated via binomial n over k
-    n_external_iters = int(np.ceil(np.sqrt(comb(n, k))))
+    # BUG FIX (2026-03-21): Replaced rough ceil(sqrt(N)) approximation with standard Grover optimal count
+    # floor(pi/4 * sqrt(N)). For small N (e.g. N=3), the old formula yielded 2 iterations, 
+    # causing over-rotation by ~180 degrees (back to uniform distribution).
+    # New formula yields 1 iteration for N=3, which is optimal.
+    N_search_space = comb(n, k)
+    n_external_iters = int(np.floor((np.pi / 4) * np.sqrt(N_search_space)))
+    # Ensure at least 1 iteration if N is small but valid, though floor usually handles it.
+    # For very small cases where floor might be 0 but we want to test, we might check, 
+    # but standard Grover on N=4 gives 1. N=3 gives 1.
+    if n_external_iters == 0 and N_search_space > 1:
+         n_external_iters = 1
+         
+    print(f"DEBUG: Search space N={N_search_space}, performing {n_external_iters} Grover iterations")
+
     for _ in range(n_external_iters):
     
         # 1. ORACLE U_ref^\perp(v*) - Calls the phase inversion function on marked (solution) vertices
