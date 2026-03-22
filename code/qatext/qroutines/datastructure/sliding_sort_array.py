@@ -68,7 +68,8 @@ def insert_ld(n, m):
 def delete(n, m):
     qf = QRoutine()
     qw = qf.new_wires(n * m + m)
-    qf1 = insert_ld(n, m).dag()
+    # Using insert_lw because insert_ld is not properly reversible (garbage in ancillas)
+    qf1 = insert_lw(n, m).dag()
     qf.apply(qf1, *qw)
     return qf
 
