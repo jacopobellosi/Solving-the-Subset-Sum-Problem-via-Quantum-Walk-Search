@@ -298,30 +298,8 @@ def main(n,
                           node_s_zeros, alpha_ones, alpha_zeros, wstate_ones,  # Passing swapped registers
                           wstate_zeros)  # Passing swapped registersrs
 
-            # Clear memory (Reset) and deallocate the temporary variables \alpha and \omega 
-            # in order to clean up the quantum gate "thermodynamic waste"
-            #
-            # BUG FIX (2026-03-20): The following cleanup block is suspected to be INCORRECT.
-            # The walk state at this point involves alpha and wstate in a superposition 
-            # corresponding to the graph edges. Forcing them to uncompute/clean here 
-            # without a proper inverse walk step destroys the coherence of the walk 
-            # and invalidates the QFT/QPE step that follows.
-            # 
-            # Specifically, reapplying 'generate' adds gates instead of removing them 
-            # (unless it's .dag()), and removing 'alpha' destroys edge information.
-            # We comment this block out to preserve the entangled state required for QPE.
-            
-            # for j in range(k):  # Loop over the subset S
-            #     prw.apply(  # Uncompute the C-COPY of elements into \alpha
-            #         qregs_init.copy_register(m).ctrl(), wstate_ones[j],  # Triggered by W-state
-            #         node_s_ones[j], alpha_ones)  # Deallocate alpha_ones
-            # for j in range(n - k):  # Loop over the complement S'
-            #     prw.apply(  # Uncompute the C-COPY of elements into \alpha'
-            #         qregs_init.copy_register(m).ctrl(), wstate_zeros[j],  # Triggered by W-state
-            #         node_s_zeros[j], alpha_zeros)  # Deallocate alpha_zeros
-
-            # prw.apply(generate(k, 1), wstate_ones)  # Uncompute the generation of W-state |Wk>
-            # prw.apply(generate(n - k, 1), wstate_zeros)  # Uncompute the generation of W-state |W(n-k)>
+            # (Removed conceptually incorrect cleanup block: Uncomputing the coin state labels \alpha and \omega 
+            # here collapses the edge superposition and destroys the walk's principle eigenvector before QFT).
 
             
             # Finally, execute the Quantum Fourier Transform (QFT) to convert phase energy 
