@@ -32,6 +32,41 @@ QPU = PyLinalg()
 # Generates a uniform superposition of all Johnson graph vertices 
 # adjacent to the current one (differing by exactly 1 element).
 # =====================================================================
+
+def build_uncompute_dicke_from_values(n, k, m, values):
+    """
+    Builds a QRoutine to perfectly uncompute the `dicke` register based on `s_ones`
+    in order to restore graph indistinguishability and avoid decoherence.
+    Assumes `values` are unique mathematically.
+    """
+    qrout = QRoutine()
+    # Allocate sequential wires matching the sizes
+    s_ones = qrout.new_wires(k * m)
+    dicke = qrout.new_wires(n)
+    
+    for x in range(k):
+        # Extract the m-qubit block for the current element in s_ones
+        s_target_reg = s_ones[x * m : (x + 1) * m]
+        
+        for i in range(n):
+            val = values[i]
+            
+            # Step 1: Flip bits of s_ones[x] where the target int has a 0
+            for bit_idx in range(m):
+                if (val & (1 << bit_idx)) == 0:
+                    qrout.apply(X, s_target_reg[bit_idx])
+            
+            # Step 2: Multi-controlled NOT to flip the i-th bit of dicke to 0 if matched
+            qrout.apply(X.ctrl(m), s_target_reg, dicke[i])
+            
+            # Step 3: Revert the bits to maintain S untouched
+            for bit_idx in range(m):
+                if (val & (1 << bit_idx)) == 0:
+                    qrout.apply(X, s_target_reg[bit_idx])
+                    
+    return qrout
+
+
 def update(n, k, m, insert, delete_fn):
     qrw = QRoutineWrapper(QRoutine())
 
@@ -230,13 +265,16 @@ def main(n,
     prw.apply(bix.bix_matrix_compile_time(n, 1, m, k, sorted_values), dicke,
               node_s_ones, node_s_zeros)
               
-    # BUG FIX: Crucial step missing from original Bärtschi implementation.
-    # The register "dicke" acts as classical memory that perfectly entangles with the choice of vertex.
-    # The Szegedy quantum walk operator only acts on the vertex states (s_ones, s_zeros, etc.).
-    # If "dicke" is not uncomputed, the different paths in the superposition remain distinguishable by the environment ("dicke"),
-    # totally preventing interference. We MUST erase "dicke" by applying the generation in reverse!
-    prw.apply(generate(n, k).dag(), dicke)
-
+    # FIX FATALE: UNCOMPUTE DELL'INDEXING DICKE.
+    # Trasforma Dicke da |u> a |0> utilizzando il contenuto di S.
+    # Se non lo facciamo, Dicke funge da "osservatore dell'ambiente" e causa 
+    # il crollo della funzione d'onda (decoerenza da entanglement)
+    inv_dicke_rout = build_uncompute_dicke_from_values(n, k, m, sorted_values)
+    flat_s_ones = []
+    for reg in node_s_ones:
+        flat_s_ones.extend(list(reg))
+    prw.apply(inv_dicke_rout, flat_s_ones, dicke)
+    
     # 3) Execute the Update Operator (U_U) a first time to generate the adjacent paths in T and T' (Edge Superposition)
     qrw_update = update(n, k, m, insert, delete)
     prw.apply(qrw_update, node_s_ones, node_s_zeros, node_t_ones, node_t_zeros,
