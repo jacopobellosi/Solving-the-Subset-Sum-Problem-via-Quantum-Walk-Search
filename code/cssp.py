@@ -230,6 +230,13 @@ def main(n,
     prw.apply(bix.bix_matrix_compile_time(n, 1, m, k, sorted_values), dicke,
               node_s_ones, node_s_zeros)
               
+    # BUG FIX: Crucial step missing from original Bärtschi implementation.
+    # The register "dicke" acts as classical memory that perfectly entangles with the choice of vertex.
+    # The Szegedy quantum walk operator only acts on the vertex states (s_ones, s_zeros, etc.).
+    # If "dicke" is not uncomputed, the different paths in the superposition remain distinguishable by the environment ("dicke"),
+    # totally preventing interference. We MUST erase "dicke" by applying the generation in reverse!
+    prw.apply(generate(n, k).dag(), dicke)
+
     # 3) Execute the Update Operator (U_U) a first time to generate the adjacent paths in T and T' (Edge Superposition)
     qrw_update = update(n, k, m, insert, delete)
     prw.apply(qrw_update, node_s_ones, node_s_zeros, node_t_ones, node_t_zeros,
@@ -264,39 +271,42 @@ def main(n,
         with prw.compute():  # Enter a compute block to allow clean uncomputation of the walk later
             # Repeat the walk application depending on the QPE steps
             for qw_iter in range(len_s):  # Iterate O(1/\sqrt{\delta}) times for Quantum Phase Estimation
-            
-                # Reflection A (Ref A, on the current node)
-                prw.apply(qrw_update.dag(), node_s_ones, node_s_zeros,  # Apply U_U^\dagger (adjoint Update) to un-superimpose edges
-                          node_t_ones, node_t_zeros, alpha_ones, alpha_zeros,  # Passing all required registers
-                          wstate_ones, wstate_zeros)  # Including the W-states
-                for j in range(k):  # Loop over the k elements of the subset S
-                    prw.apply(X, wstate_ones[j])  # Apply X gates to effectively flip the control condition for the 0 state
-                for j in range(n - k):  # We must ALSO flip the zeros state complement for the reflection projection
-                    prw.apply(X, wstate_zeros[j])
-                prw.apply(Z.ctrl(n), qpe_s[qw_iter], wstate_ones, wstate_zeros)  # Apply a controlled-Z conditioned on the ENTIRE coin state reverting to 0
-                for j in range(k):  # Remove the X gates to restore the original state
-                    prw.apply(X, wstate_ones[j])  
-                for j in range(n - k):  
-                    prw.apply(X, wstate_zeros[j])  
-                prw.apply(qrw_update, node_s_ones, node_s_zeros, node_t_ones,  # Re-apply U_U to recreate the edge superposition (Ref A complete)
-                          node_t_zeros, alpha_ones, alpha_zeros, wstate_ones,  # Passing registers
-                          wstate_zeros)  # Passing registers
-                # Reflection B (Ref B, on the adjacent node, swapping the spatial coordinates)
-                prw.apply(qrw_update.dag(), node_t_ones, node_t_zeros,  # Apply U_U^\dagger but with S and T SWAPPED to reflect on the adjacent vertex
-                          node_s_ones, node_s_zeros, alpha_ones, alpha_zeros,  # Notice how node_t_* takes the place of node_s_*
-                          wstate_ones, wstate_zeros)  # Ancillas remain correctly mapped to their respective k and n-k bounds
-                for j in range(k):  # Loop over the k elements of the subset S
-                    prw.apply(X, wstate_ones[j])  # Apply X gates to flip the control condition
-                for j in range(n - k):  # Flip zeros state complement
-                    prw.apply(X, wstate_zeros[j])
-                prw.apply(Z.ctrl(n), qpe_s[qw_iter], wstate_ones, wstate_zeros)  # Apply the complete controlled-Z phase inversion on the adjacent Reflection B
-                for j in range(k):  # Restore states
-                    prw.apply(X, wstate_ones[j])  # Remove the X gates on the wstate
-                for j in range(n - k):  
-                    prw.apply(X, wstate_zeros[j])  
-                prw.apply(qrw_update, node_t_ones, node_t_zeros, node_s_ones,  # Re-apply the SWAPPED U_U operator to bounce back (Ref B complete)
-                          node_s_zeros, alpha_ones, alpha_zeros, wstate_ones,  # Passing swapped registers
-                          wstate_zeros)  # Passing swapped registersrs
+                
+                # BUG FIX: QPE mathematically requires W to be applied 2^j times for the j-th qubit.
+                # The original code only applied it once per QPE qubit! 
+                for _ in range(2**qw_iter):
+                    # Reflection A (Ref A, on the current node)
+                    prw.apply(qrw_update.dag(), node_s_ones, node_s_zeros,  # Apply U_U^\dagger (adjoint Update) to un-superimpose edges
+                              node_t_ones, node_t_zeros, alpha_ones, alpha_zeros,  # Passing all required registers
+                              wstate_ones, wstate_zeros)  # Including the W-states
+                    for j in range(k):  # Loop over the k elements of the subset S
+                        prw.apply(X, wstate_ones[j])  # Apply X gates to effectively flip the control condition for the 0 state
+                    for j in range(n - k):  # We must ALSO flip the zeros state complement for the reflection projection
+                        prw.apply(X, wstate_zeros[j])
+                    prw.apply(Z.ctrl(n), qpe_s[qw_iter], wstate_ones, wstate_zeros)  # Apply a controlled-Z conditioned on the ENTIRE coin state reverting to 0
+                    for j in range(k):  # Remove the X gates to restore the original state
+                        prw.apply(X, wstate_ones[j])  
+                    for j in range(n - k):  
+                        prw.apply(X, wstate_zeros[j])  
+                    prw.apply(qrw_update, node_s_ones, node_s_zeros, node_t_ones,  # Re-apply U_U to recreate the edge superposition (Ref A complete)
+                              node_t_zeros, alpha_ones, alpha_zeros, wstate_ones,  # Passing registers
+                              wstate_zeros)  # Passing registers
+                    # Reflection B (Ref B, on the adjacent node, swapping the spatial coordinates)
+                    prw.apply(qrw_update.dag(), node_t_ones, node_t_zeros,  # Apply U_U^\dagger but with S and T SWAPPED to reflect on the adjacent vertex
+                              node_s_ones, node_s_zeros, alpha_ones, alpha_zeros,  # Notice how node_t_* takes the place of node_s_*
+                              wstate_ones, wstate_zeros)  # Ancillas remain correctly mapped to their respective k and n-k bounds
+                    for j in range(k):  # Loop over the k elements of the subset S
+                        prw.apply(X, wstate_ones[j])  # Apply X gates to flip the control condition
+                    for j in range(n - k):  # Flip zeros state complement
+                        prw.apply(X, wstate_zeros[j])
+                    prw.apply(Z.ctrl(n), qpe_s[qw_iter], wstate_ones, wstate_zeros)  # Apply the complete controlled-Z phase inversion on the adjacent Reflection B
+                    for j in range(k):  # Restore states
+                        prw.apply(X, wstate_ones[j])  # Remove the X gates on the wstate
+                    for j in range(n - k):  
+                        prw.apply(X, wstate_zeros[j])  
+                    prw.apply(qrw_update, node_t_ones, node_t_zeros, node_s_ones,  # Re-apply the SWAPPED U_U operator to bounce back (Ref B complete)
+                              node_s_zeros, alpha_ones, alpha_zeros, wstate_ones,  # Passing swapped registers
+                              wstate_zeros)  # Passing swapped registersrs
 
             # (Removed conceptually incorrect cleanup block: Uncomputing the coin state labels \alpha and \omega 
             # here collapses the edge superposition and destroys the walk's principle eigenvector before QFT).
