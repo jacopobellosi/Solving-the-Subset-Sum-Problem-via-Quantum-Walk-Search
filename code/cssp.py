@@ -28,6 +28,30 @@ QPU = PyLinalg()
 
 
 # =====================================================================
+# DEBUGGING UTILITY
+# =====================================================================
+def simulate_and_print_state(prw, qubits_to_measure, label="State"):
+    """
+    Compiles and simulates the program up to the current point.
+    Allows inspection of the intermediate state vector or probability distribution.
+    """
+    print(f"\n[DEBUG] --- {label} ---")
+    from qat.qpus import PyLinalg
+    try:
+        circ = prw.to_circ(link=[classarith, cuccaro_arith])
+        qpu = PyLinalg()
+        job = circ.to_job(qubits=qubits_to_measure)
+        res = qpu.submit(job)
+        
+        # Filter and print states with significant probability
+        for sample in res:
+            if sample.probability > 0.001:
+                amp_str = f" | Ampl: {sample.amplitude}" if hasattr(sample, 'amplitude') else ""
+                print(f"Prob: {sample.probability:.5f}{amp_str} | State: {sample.state}")
+    except Exception as e:
+        print(f"Failed to simulate intermediate state: {e}")
+
+# =====================================================================
 # U_U OPERATOR (Update Operator) - Described in "Sec. III-D. Operator UU"
 # Generates a uniform superposition of all Johnson graph vertices 
 # adjacent to the current one (differing by exactly 1 element).
@@ -241,6 +265,7 @@ def main(n,
 
     # qpe_s = Support register used for the Approximate Reflection U_ref(E)
     qpe_s = prw.qarray_alloc(len_s, 1, "qpe_s", str)
+    flat_qpe_s = list(qpe_s)
     # sum_reg = Support "sum" register for the CSSP target sums
     sum_reg = prw.qarray_alloc(1, n_qubits_sum, "sum", int)
     
@@ -275,10 +300,19 @@ def main(n,
         flat_s_ones.extend(list(reg))
     prw.apply(inv_dicke_rout, flat_s_ones, dicke)
     
+    if to_simulate:
+        simulate_and_print_state(prw, dicke[:] + flat_s_ones, "Checkpoint 1: Init State (Dicke + S_ones)")
+    
     # 3) Execute the Update Operator (U_U) a first time to generate the adjacent paths in T and T' (Edge Superposition)
     qrw_update = update(n, k, m, insert, delete)
     prw.apply(qrw_update, node_s_ones, node_s_zeros, node_t_ones, node_t_zeros,
               alpha_ones, alpha_zeros, wstate_ones, wstate_zeros)
+
+    if to_simulate:
+        flat_t_ones = []
+        for reg in node_t_ones:
+            flat_t_ones.extend(list(reg))
+        simulate_and_print_state(prw, flat_s_ones + flat_t_ones, "Checkpoint 2: Edge Superposition (S_ones + T_ones)")
 
     # =====================================================================
     # MAIN MNRS AMPLITUDE AMPLIFICATION ALGORITHMIC LOOP
@@ -304,6 +338,9 @@ def main(n,
         # 1. ORACLE U_ref^\perp(v*) - Calls the phase inversion function on marked (solution) vertices
         qf_ora = oracle(n, k, m, n_qubits_sum, target_sum)  # Instantiate the Oracle operator U_f with target p
         prw.apply(qf_ora, node_s_ones, sum_reg)  # Apply the Phase Flip U_f on the current subset S
+
+        if to_simulate:
+            simulate_and_print_state(prw, flat_s_ones, "Checkpoint 3: Post-Oracle (S_ones amplitudes)")
 
         # 2. APPROXIMATE REFLECTION U_ref(E) - Activates the Szegedy "double reflection" walk
         with prw.compute():  # Enter a compute block to allow clean uncomputation of the walk later
@@ -354,6 +391,9 @@ def main(n,
             # into measurable probability for the simulator (we estimate the end of the Walk)
             prw.apply(QFT(len_s), qpe_s)  # Apply QFT on the Phase Estimation register
             
+            if to_simulate:
+                simulate_and_print_state(prw, flat_s_ones + flat_qpe_s, "Checkpoint 4: Post-QPE (S_ones + QPE_S)")
+                
         # 3. DIFFUSION: Inversion about the mean (Reflect results on the center, purely like Grover)
         for j in range(len_s):  # Iterate over all QPE qubits
             prw.apply(X, qpe_s[j])  # Apply X gates (NOT) to prepare for zero-state reflection
@@ -364,8 +404,14 @@ def main(n,
         for j in range(len_s):  # Iterate over all QPE qubits again
             prw.apply(X, qpe_s[j])  # Remove the X gates to restore state with flipped mean
             
+        if to_simulate:
+            simulate_and_print_state(prw, flat_s_ones + flat_qpe_s, "Checkpoint 5: Post-Diffusion (S_ones + QPE_S)")
+            
         # Uncompute for the logical iteration
-        prw.uncompute()  # Collapse the entire compute block, physically reverting the QFT and walks without losing the Grover phase
+        prw.uncompute()
+
+        if to_simulate:
+            simulate_and_print_state(prw, flat_s_ones, "Checkpoint 6: End of Grover Iteration (S_ones)")  # Collapse the entire compute block, physically reverting the QFT and walks without losing the Grover phase
 
     print("Program qubits")  # Console printout for debugging
     for k, v in prw._qregnames_to_properties.items():  # Loop through all allocated named quantum registers
