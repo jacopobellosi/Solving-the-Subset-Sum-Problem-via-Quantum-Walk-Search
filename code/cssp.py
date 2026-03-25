@@ -30,26 +30,46 @@ QPU = PyLinalg()
 # =====================================================================
 # DEBUGGING UTILITY
 # =====================================================================
-def simulate_and_print_state(prw, qubits_to_measure, label="State"):
+def simulate_and_print_state(prw, n, k, m, len_s, n_qubits_sum, label="State"):
     """
     Compiles and simulates the program up to the current point.
-    Allows inspection of the intermediate state vector or probability distribution.
+    Runs a FULL simulation without tracing out qubits to preserve phase info (amplitudes).
+    Parses the registers automatically.
     """
     print(f"\n[DEBUG] --- {label} ---")
+    import traceback
     from qat.qpus import PyLinalg
     try:
         circ = prw.to_circ(link=[classarith, cuccaro_arith])
         qpu = PyLinalg()
-        job = circ.to_job(qubits=qubits_to_measure)
+        
+        # Measure ALL qubits. Do not pass 'qubits' to to_job() to get full state vector and amplitudes
+        job = circ.to_job()
         res = qpu.submit(job)
         
-        # Filter and print states with significant probability
+        count = 0
         for sample in res:
-            if sample.probability > 0.001:
-                amp_str = f" | Ampl: {sample.amplitude}" if hasattr(sample, 'amplitude') else ""
-                print(f"Prob: {sample.probability:.5f}{amp_str} | State: {sample.state}")
+            if sample.probability > 0.0005:
+                count += 1
+                # Format: |010...1> -> "010...1"
+                raw_str = str(sample.state)[1:-1]
+                
+                idx = 0
+                dicke_str = raw_str[idx : idx+n]; idx += n
+                s1_str = raw_str[idx : idx+k*m]; idx += k*m
+                s0_str = raw_str[idx : idx+(n-k)*m]; idx += (n-k)*m
+                
+                # skip t1, t0, a1, a0, w1, w0
+                idx += k*m + (n-k)*m + 2*m + k + (n-k)
+                qpe_str = raw_str[idx : idx+len_s]; idx += len_s
+                sum_str = raw_str[idx : idx+n_qubits_sum]
+                
+                amp_str = f" | Ampl: {sample.amplitude.real:+.4f}{sample.amplitude.imag:+.4f}j" if hasattr(sample, 'amplitude') else ""
+                print(f"Prob: {sample.probability:.5f}{amp_str} | Dicke:{dicke_str} | S_1:{s1_str} | S_0:{s0_str} | QPE:{qpe_str} | Sum:{sum_str}")
+        print(f"Total states graphed: {count}")
     except Exception as e:
         print(f"Failed to simulate intermediate state: {e}")
+        traceback.print_exc()
 
 # =====================================================================
 # U_U OPERATOR (Update Operator) - Described in "Sec. III-D. Operator UU"
@@ -301,7 +321,7 @@ def main(n,
     prw.apply(inv_dicke_rout, flat_s_ones, dicke)
     
     if to_simulate:
-        simulate_and_print_state(prw, dicke[:] + flat_s_ones, "Checkpoint 1: Init State (Dicke + S_ones)")
+        simulate_and_print_state(prw, n, k, m, len_s, n_qubits_sum, "Checkpoint 1: Init State")
     
     # 3) Execute the Update Operator (U_U) a first time to generate the adjacent paths in T and T' (Edge Superposition)
     qrw_update = update(n, k, m, insert, delete)
@@ -309,10 +329,7 @@ def main(n,
               alpha_ones, alpha_zeros, wstate_ones, wstate_zeros)
 
     if to_simulate:
-        flat_t_ones = []
-        for reg in node_t_ones:
-            flat_t_ones.extend(list(reg))
-        simulate_and_print_state(prw, flat_s_ones + flat_t_ones, "Checkpoint 2: Edge Superposition (S_ones + T_ones)")
+        simulate_and_print_state(prw, n, k, m, len_s, n_qubits_sum, "Checkpoint 2: Edge Superposition")
 
     # =====================================================================
     # MAIN MNRS AMPLITUDE AMPLIFICATION ALGORITHMIC LOOP
@@ -340,7 +357,7 @@ def main(n,
         prw.apply(qf_ora, node_s_ones, sum_reg)  # Apply the Phase Flip U_f on the current subset S
 
         if to_simulate:
-            simulate_and_print_state(prw, flat_s_ones, "Checkpoint 3: Post-Oracle (S_ones amplitudes)")
+            simulate_and_print_state(prw, n, k, m, len_s, n_qubits_sum, "Checkpoint 3: Post-Oracle")
 
         # 2. APPROXIMATE REFLECTION U_ref(E) - Activates the Szegedy "double reflection" walk
         with prw.compute():  # Enter a compute block to allow clean uncomputation of the walk later
@@ -392,7 +409,7 @@ def main(n,
             prw.apply(QFT(len_s), qpe_s)  # Apply QFT on the Phase Estimation register
             
             if to_simulate:
-                simulate_and_print_state(prw, flat_s_ones + flat_qpe_s, "Checkpoint 4: Post-QPE (S_ones + QPE_S)")
+                simulate_and_print_state(prw, n, k, m, len_s, n_qubits_sum, "Checkpoint 4: Post-QPE")
                 
         # 3. DIFFUSION: Inversion about the mean (Reflect results on the center, purely like Grover)
         for j in range(len_s):  # Iterate over all QPE qubits
@@ -405,13 +422,13 @@ def main(n,
             prw.apply(X, qpe_s[j])  # Remove the X gates to restore state with flipped mean
             
         if to_simulate:
-            simulate_and_print_state(prw, flat_s_ones + flat_qpe_s, "Checkpoint 5: Post-Diffusion (S_ones + QPE_S)")
+            simulate_and_print_state(prw, n, k, m, len_s, n_qubits_sum, "Checkpoint 5: Post-Diffusion")
             
         # Uncompute for the logical iteration
         prw.uncompute()
 
         if to_simulate:
-            simulate_and_print_state(prw, flat_s_ones, "Checkpoint 6: End of Grover Iteration (S_ones)")  # Collapse the entire compute block, physically reverting the QFT and walks without losing the Grover phase
+            simulate_and_print_state(prw, n, k, m, len_s, n_qubits_sum, "Checkpoint 6: End of Grover Iteration")  # Collapse the entire compute block, physically reverting the QFT and walks without losing the Grover phase
 
     print("Program qubits")  # Console printout for debugging
     for k, v in prw._qregnames_to_properties.items():  # Loop through all allocated named quantum registers
