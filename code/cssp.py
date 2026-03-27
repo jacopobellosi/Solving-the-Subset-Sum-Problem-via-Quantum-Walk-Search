@@ -252,10 +252,16 @@ def main(n,
     m = max(values).bit_length()
     
     # delta = Theoretical spectral gap of the Johnson Graph (Sec II-D, page 169)
-    delta = n / (k * (n - k))
+    # The original formula n/(k*(n-k)) yields numbers > 1 for small instances (e.g. N=3, K=1 -> 1.5).
+    # Since transition probabilities and spectral gaps for normalized walks are bounded by 1,
+    # we enforce a ceiling.
+    delta = min(n / (k * (n - k)), 1.0)
     
     # len_s = Number of Quantum Phase Estimation (QPE) steps based on O(1/\sqrt{\delta})
-    len_s = int(np.ceil(np.log2(np.pi / (2 * np.sqrt(delta)))))
+    # BUG FIX: A 1-qubit QPE is unable to cleanly distinguish intermediate phases (it only measures 0 or Pi).
+    # This destroys the Szegedy coherence during the uncompute step, preventing amplitude amplification.
+    # We must force at least 3 qubits of precision for the QFT to operate effectively.
+    len_s = max(int(np.ceil(np.log2(np.pi / (2 * np.sqrt(delta))))), 3)
     
     # n_qubits_sum = Number of qubits needed to safely hold the sum of k integers without overflow
     n_qubits_sum = int(np.ceil(np.log2(k))) + m
