@@ -32,7 +32,7 @@ def run_toy_amplification(use_correct_qft=True):
         # Per simulare l'entanglement tra lo spazio di ricerca e la QPE,
         # applichiamo dei gate controllati fittizi:
         prg.apply(Z.ctrl(1), search_reg[0], qpe_reg[0])
-        ประ prg.apply(Z.ctrl(1), search_reg[1], qpe_reg[1])
+        prg.apply(Z.ctrl(1), search_reg[1], qpe_reg[1])
 
         # APPLICAZIONE DEL QFT (IL BUG RISOLTO)
         if use_correct_qft:
