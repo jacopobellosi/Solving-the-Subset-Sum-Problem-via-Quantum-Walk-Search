@@ -242,7 +242,7 @@ def main(n,
          values: list[int],
          target_sum: int,
          low_width=True,
-         to_simulate=False):
+         to_simulate=False, print_checkpoints=False):
          
     # If low-width is True, "insert_lw" is used (minimizes ancillary qubits). 
     # Otherwise "insert_ld" is used (minimizes circuit depth but uses more qubits). Sec III-D "Insertion and deletion"
@@ -326,7 +326,7 @@ def main(n,
         flat_s_ones.extend(list(reg))
     prw.apply(inv_dicke_rout, flat_s_ones, dicke)
     
-    if to_simulate:
+    if print_checkpoints:
         simulate_and_print_state(prw, n, k, m, len_s, n_qubits_sum, "Checkpoint 1: Init State")
     
     # 3) Execute the Update Operator (U_U) a first time to generate the adjacent paths in T and T' (Edge Superposition)
@@ -334,7 +334,7 @@ def main(n,
     prw.apply(qrw_update, node_s_ones, node_s_zeros, node_t_ones, node_t_zeros,
               alpha_ones, alpha_zeros, wstate_ones, wstate_zeros)
 
-    if to_simulate:
+    if print_checkpoints:
         simulate_and_print_state(prw, n, k, m, len_s, n_qubits_sum, "Checkpoint 2: Edge Superposition")
 
     # =====================================================================
@@ -362,7 +362,7 @@ def main(n,
         qf_ora = oracle(n, k, m, n_qubits_sum, target_sum)  # Instantiate the Oracle operator U_f with target p
         prw.apply(qf_ora, node_s_ones, sum_reg)  # Apply the Phase Flip U_f on the current subset S
 
-        if to_simulate:
+        if print_checkpoints:
             simulate_and_print_state(prw, n, k, m, len_s, n_qubits_sum, "Checkpoint 3: Post-Oracle")
 
         # 2. APPROXIMATE REFLECTION U_ref(E) - Activates the Szegedy "double reflection" walk
@@ -424,13 +424,13 @@ def main(n,
         for j in range(len_s):  # Iterate over all QPE qubits again
             prw.apply(X, qpe_s[j])  # Remove the X gates to restore state with flipped mean
             
-        if to_simulate:
+        if print_checkpoints:
             simulate_and_print_state(prw, n, k, m, len_s, n_qubits_sum, "Checkpoint 5: Post-Diffusion")
             
         # Uncompute for the logical iteration
         prw.uncompute()
 
-        if to_simulate:
+        if print_checkpoints:
             simulate_and_print_state(prw, n, k, m, len_s, n_qubits_sum, "Checkpoint 6: End of Grover Iteration")  # Collapse the entire compute block, physically reverting the QFT and walks without losing the Grover phase
 
     print("Program qubits")  # Console printout for debugging
@@ -459,7 +459,9 @@ if __name__ == '__main__':
     import sys
     # Checks the flag passed by Pytest/CLI to decide whether to block the simulation
     to_simulate = sys.argv[1].lower() == 'true' if len(sys.argv) > 1 else False
+    print_checkpoints = sys.argv[2].lower() == 'true' if len(sys.argv) > 2 else False
     print(f"To simulate is {to_simulate}")
+    print(f"Print Checkpoints is {print_checkpoints}")
 
     # The set X (Subset Sum Problem SSP values)
     values = [1, 2, 3]
@@ -475,4 +477,4 @@ if __name__ == '__main__':
     print(f"n {n}, k {k}, m {m}, values {values}, target sum = {ts}")
     
     # Boot the global MNRS construction
-    main(n, k, values, ts, low_width=True, to_simulate=to_simulate)
+    main(n, k, values, ts, low_width=True, to_simulate=to_simulate, print_checkpoints=print_checkpoints)
