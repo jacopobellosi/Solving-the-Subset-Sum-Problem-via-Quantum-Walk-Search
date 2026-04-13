@@ -410,11 +410,11 @@ def main(n,
             # here collapses the edge superposition and destroys the walk's principle eigenvector before QFT).
 
             
-            # Finally, execute the Quantum Fourier Transform (QFT) to convert phase energy 
+            # Finally, execute the Quantum Fourier Transform (QFT) to convert phase energy
             # into measurable probability for the simulator (we estimate the end of the Walk)
             prw.apply(QFT(len_s).dag(), qpe_s)  # Apply Inverse QFT on the Phase Estimation register
 
-            if to_simulate:
+            if print_checkpoints:
                 simulate_and_print_state(prw, n, k, m, len_s, n_qubits_sum, "Checkpoint 4: Post-QPE")
             prw.apply(X, qpe_s[j])  # Apply X gates (NOT) to prepare for zero-state reflection
         if len_s > 1:  # If we have more than 1 QPE qubit
