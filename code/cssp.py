@@ -412,9 +412,7 @@ def main(n,
             
             # Finally, execute the Quantum Fourier Transform (QFT) to convert phase energy 
             # into measurable probability for the simulator (we estimate the end of the Walk)
-            prw.apply(QFT(len_s), qpe_s)  # Apply QFT on the Phase Estimation register
-            
-            if to_simulate:
+            prw.apply(QFT(len_s).dag(), qpe_s)  # Apply Inverse QFT on the Phase Estimation register
                 simulate_and_print_state(prw, n, k, m, len_s, n_qubits_sum, "Checkpoint 4: Post-QPE")
                 
         # 3. DIFFUSION: Inversion about the mean (Reflect results on the center, purely like Grover)
