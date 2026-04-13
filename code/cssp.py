@@ -413,10 +413,9 @@ def main(n,
             # Finally, execute the Quantum Fourier Transform (QFT) to convert phase energy 
             # into measurable probability for the simulator (we estimate the end of the Walk)
             prw.apply(QFT(len_s).dag(), qpe_s)  # Apply Inverse QFT on the Phase Estimation register
-            simulate_and_print_state(prw, n, k, m, len_s, n_qubits_sum, "Checkpoint 4: Post-QPE")
-                
-        # 3. DIFFUSION: Inversion about the mean (Reflect results on the center, purely like Grover)
-        for j in range(len_s):  # Iterate over all QPE qubits
+
+            if to_simulate:
+                simulate_and_print_state(prw, n, k, m, len_s, n_qubits_sum, "Checkpoint 4: Post-QPE")
             prw.apply(X, qpe_s[j])  # Apply X gates (NOT) to prepare for zero-state reflection
         if len_s > 1:  # If we have more than 1 QPE qubit
             prw.apply(Z.ctrl(len_s - 1), qpe_s)  # Multi-controlled Z gate hitting the zero state
@@ -459,10 +458,10 @@ def main(n,
 if __name__ == '__main__':
     import sys
     # Checks the flag passed by Pytest/CLI to decide whether to block the simulation
-    to_simulate = bool(sys.argv[1])
+    to_simulate = sys.argv[1].lower() == 'true' if len(sys.argv) > 1 else False
     print(f"To simulate is {to_simulate}")
-    
-    # The set X (Subset Sum Problem SSP values) 
+
+    # The set X (Subset Sum Problem SSP values)
     values = [1, 2, 3]
     # n = size of X
     n = len(values)
