@@ -1,0 +1,8 @@
+nohup: ignoring input
+TEST 1: Initial preparation only
+
+=== After Dicke+VBE+Update (no oracle) ===
+  Qubits: 28, Gates: 181
+  P=0.333333  State=|1>
+  P=0.333333  State=|2>
+  P=0.333333  State=|3>

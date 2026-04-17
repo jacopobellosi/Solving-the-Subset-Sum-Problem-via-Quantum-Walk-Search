@@ -1,0 +1,20 @@
+nohup: ignoring input
+To simulate is True
+n 3, k 1, m 2, values [1, 2, 3], target sum = 3
+DEBUG: Search space N=3, performing 1 Grover iterations
+Program qubits
+dicke slice(0, 3, None)
+s_1 slice(3, 5, None)
+s_0 slice(5, 9, None)
+t_1 slice(9, 11, None)
+t_0 slice(11, 15, None)
+a_1 slice(15, 17, None)
+a_0 slice(17, 19, None)
+w_1 slice(19, 20, None)
+w_0 slice(20, 22, None)
+qpe_s slice(22, 23, None)
+sum slice(23, 25, None)
+{'nbqbits': 28, 'size': 140, 'gates': {'custom gate': 0, 'H': 3, 'X': 93, 'CNOT': 844, 'C-RY': 11, 'C-X': 8, 'C-SWAP': 48, 'C-CNOT': 54, 'CCNOT': 292, 'CSIGN': 1, 'C-C-C-Z': 4, 'Z': 1}, 'measurements': 0, 'resets': 0, 'logic': 0, 'breaks': 0, 'remaps': 0, 'gate_size': 1359}
+0.33333333333333315 |1>
+0.3333333333333331 |2>
+0.3333333333333332 |3>

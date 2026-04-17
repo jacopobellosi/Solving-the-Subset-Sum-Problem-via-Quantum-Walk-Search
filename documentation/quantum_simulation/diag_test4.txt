@@ -1,0 +1,8 @@
+nohup: ignoring input
+TEST 4: Preparation + Oracle + unconditional walk (Ref A + Ref B)
+
+=== After unconditional walk step (Ref A + Ref B) ===
+  Qubits: 28, Gates: 776
+  P=0.333333  State=|1>
+  P=0.333333  State=|2>
+  P=0.333333  State=|3>

@@ -1,0 +1,18 @@
+nohup: ignoring input
+To simulate is True
+Print Checkpoints is False
+n 3, k 1, m 2, values [1, 2, 3], target sum = 3
+DEBUG: Search space N=3, performing 1 Grover iterations
+Program qubits
+dicke slice(0, 3, None)
+s_1 slice(3, 5, None)
+s_0 slice(5, 9, None)
+t_1 slice(9, 11, None)
+t_0 slice(11, 15, None)
+a_1 slice(15, 17, None)
+a_0 slice(17, 19, None)
+w_1 slice(19, 20, None)
+w_0 slice(20, 22, None)
+qpe_s slice(22, 25, None)
+sum slice(25, 27, None)
+{'nbqbits': 30, 'size': 848, 'gates': {'custom gate': 0, 'H': 9, 'X': 532, 'CNOT': 5260, 'C-RY': 59, 'C-X': 8, 'C-SWAP': 240, 'C-C-X': 3, 'C-CNOT': 342, 'CCNOT': 1828, 'CSIGN': 1, 'C-C-C-Z': 28, 'C-PH': 6, 'C-C-Z': 1}, 'measurements': 0, 'resets': 0, 'logic': 0, 'breaks': 0, 'remaps': 0, 'gate_size': 8317}
