@@ -8,21 +8,11 @@
 \usepackage{xcolor}
 \usepackage{hyperref}
 \usepackage{booktabs}
-\usepackage{longtable}
-\usepackage{graphicx}
-\usepackage{fancyhdr}
-\usepackage{titlesec}
 
-\hypersetup{
-    colorlinks=true,
-    linkcolor=blue,
-    urlcolor=blue,
-    citecolor=blue
-}
+\hypersetup{colorlinks=true, linkcolor=blue}
 
 \lstset{
-    language=Python,
-    basicstyle=\ttfamily\small,
+    basicstyle=\ttfamily\footnotesize,
     keywordstyle=\color{blue}\bfseries,
     commentstyle=\color{gray},
     stringstyle=\color{orange},
@@ -30,453 +20,187 @@
     breaklines=true,
     frame=single,
     backgroundcolor=\color{gray!5},
-    numbers=left,
-    numberstyle=\tiny\color{gray},
-    xleftmargin=2em,
-    xrightmargin=1em
 }
 
-\pagestyle{fancy}
-\fancyhf{}
-\rhead{Solving the Subset Sum Problem via Quantum Walk Search}
-\lhead{Simulation Debugging Report}
-\cfoot{\thepage}
-
-\title{%
-    \textbf{Simulation Debugging Report}\\[0.5em]
-    \large Attempted Fixes for the Flat Probability Distribution Problem\\
-    \large in the MNRS Quantum Walk Search for the Subset Sum Problem
-}
+\title{\textbf{Simulation Debugging Report}\\
+\large Modifications Attempted on the MNRS Quantum Walk Search Simulation}
 \author{Jacopo Bellosi}
 \date{April 2026}
 
 \begin{document}
-
 \maketitle
-\tableofcontents
-\newpage
+
+\noindent
+This report documents all main modifications attempted on the simulation code for the paper
+\textit{``Solving the Subset Sum Problem via Quantum Walk Search''} (Lancellotti et al., IEEE TC 2025).
+All tests use the same instance: $n=3$, $k=1$, \texttt{values=[1,2,3]}, \texttt{target\_sum=3}.
+In every case the final result is a flat probability distribution: \texttt{0.333 |1>, 0.333 |2>, 0.333 |3>}.
 
 % -----------------------------------------------------------------------
-\section{Introduction and Context}
+\section*{Baseline -- Original Paper Code}
 % -----------------------------------------------------------------------
 
-This document summarises all major modifications attempted on the simulation
-code that accompanies the paper:
+Code as provided with the paper (\texttt{code\_2025TC/cssp.py}).
+Key settings: $\delta = n/(k(n-k))$ (unclamped),
+$\ell_s = \lceil\log_2(\pi/(2\sqrt{\delta}))\rceil$,
+outer iterations $= \lceil\sqrt{\binom{n}{k}}\rceil$,
+forward QFT, single $U_U$ application per QPE qubit.
 
-\begin{quote}
-\textit{``Solving the Subset Sum Problem via Quantum Walk Search''},\\
-Lancellotti et al., IEEE Transactions on Computers (TC), 2025.
-\end{quote}
+\begin{lstlisting}[language=Python]
+delta = n / (k * (n - k))
+len_s = int(np.ceil(np.log2(np.pi / (2 * np.sqrt(delta)))))
+n_external_iters = int(np.ceil(np.sqrt(comb(n, k))))
 
-The paper presents an algorithm based on the MNRS quantum walk framework
-\cite{mnrs} applied to the \emph{Constrained Subset Sum Problem} (CSSP).
-The algorithm exploits the structure of the Johnson graph $J(n,k)$ and uses
-Szegedy-style quantum walks combined with Quantum Phase Estimation (QPE) to
-achieve a quadratic speedup over classical brute-force search.
+for qw_iter in range(len_s):
+    prw.apply(qrw_update.dag(), ...)
+    for j in range(k):
+        prw.apply(X, wstate_ones[j])
+    prw.apply(Z.ctrl(k), qpe_s[qw_iter], wstate_ones)   # only wstate_ones
+    for j in range(k):
+        prw.apply(X, wstate_ones[j])
+    prw.apply(qrw_update, ...)
+    # Ref B controlled only on wstate_zeros
+    prw.apply(Z.ctrl(n - k), qpe_s[qw_iter], wstate_zeros)
 
-\subsection{The Problem}
+prw.apply(QFT(len_s), qpe_s)   # forward QFT
+\end{lstlisting}
 
-The simulation, implemented with the \texttt{myQLM} framework (Python), is
-supposed to find which $k$-element subset of a set $X = \{x_1,\ldots,x_n\}$
-sums to a target value $p$.  After running the circuit, the final measurement
-probabilities over the register $S$ (the current subset) should be
-\emph{amplified} toward the correct solution.
-
-\textbf{Observed behaviour:} regardless of the code version or the
-modifications applied, the final probability distribution over the output
-register is always \emph{perfectly flat}:
-
-\begin{center}
-\begin{tabular}{lc}
-\toprule
-State & Probability \\
-\midrule
-$|1\rangle$ & $0.3333\ldots$ \\
-$|2\rangle$ & $0.3333\ldots$ \\
-$|3\rangle$ & $0.3333\ldots$ \\
-\bottomrule
-\end{tabular}
-\end{center}
-
-Every modification described below was tested with the same canonical
-instance, and every run produced the same flat result.
-
-\subsection{Canonical Test Instance}
-
-All simulations in this report use the following parameters unless otherwise
-stated:
-
-\begin{itemize}
-    \item $n = 3$, $k = 1$, values $= [1, 2, 3]$, target sum $p = 3$
-    \item The unique solution is the singleton subset $\{3\}$
-    \item $m = 2$ bits per element (since $\max(X) = 3$ requires 2 bits)
-    \item Circuit: 28 qubits; expected amplified output: high probability on
-          state $|3\rangle$
-\end{itemize}
-
-One additional test was also run with $k = 2$ (Section~\ref{sec:k2test}).
-
-\subsection{Code Repository}
-
-The full git history is available at the project repository. The reference
-code delivered with the paper is in \texttt{code\_2025TC/cssp.py}; the
-current, most-debugged version lives in \texttt{code\_updated/cssp.py}.
-Simulation output files are stored under
-\texttt{documentation/quantum\_simulation/}.
-
-% -----------------------------------------------------------------------
-\section{Baseline: Original Paper Code}
-% -----------------------------------------------------------------------
-
-\label{sec:baseline}
-
-\textbf{Commit:} \texttt{c669fd9} (2026-03-08, ``Refactor CSSP, VBE and
-sliding-sort routines'') -- first complete version of the CSSP algorithm.
-
-\textbf{File:} \texttt{code\_2025TC/cssp.py}
-
-\subsection{Description}
-
-The original code faithfully translates the paper algorithm into myQLM
-circuits:
-
-\begin{enumerate}
-    \item Prepares a Dicke state $|D^n_k\rangle$ on register $\sigma$ and
-          applies the Vertex Binary Encoding (VBE, \texttt{bix}) to fill $S$
-          and $S'$.
-    \item Constructs the Update operator $U_U$ (Johnson-graph traversal).
-    \item Runs $\lceil\sqrt{\binom{n}{k}}\rceil$ outer Grover iterations,
-          each containing:
-          \begin{itemize}
-              \item Oracle $U_f$ (phase flip on target sum)
-              \item QPE-based approximate reflection $U_\text{ref}(E)$
-              \item Diffusion (inversion around zero on the QPE register)
-          \end{itemize}
-\end{enumerate}
-
-Notable original settings:
-\begin{itemize}
-    \item Spectral gap: $\delta = n / (k(n-k))$ -- no clamping
-    \item QPE qubit count: $\ell_s = \lceil \log_2(\pi / (2\sqrt{\delta})) \rceil$
-    \item Number of outer iterations: $\lceil\sqrt{\binom{n}{k}}\rceil$
-    \item QPE walk loop: single application of $U_U$ per QPE qubit
-    \item QFT direction: forward QFT
-    \item Reflection B uses swapped register order ($S'\leftrightarrow S$,
-          but controlled only on $\omega'$, not on $\omega'$ and $\omega$
-          jointly)
-\end{itemize}
-
-\subsection{Result}
-
-\textbf{Output file:} \texttt{result\_original\_code.txt}
-
-\begin{lstlisting}[language={}, caption={result\_original\_code.txt (excerpt)}]
-n 3, k 1, m 2, values [1, 2, 3], target sum = 3
-{'nbqbits': 28, 'size': 258, 'gates': {'H': 5, 'X': 141,
- 'CNOT': 1600, 'CCNOT': 552, ...}, 'gate_size': 2547}
+\noindent\textbf{Result} (\texttt{result\_original\_code.txt}):
+\begin{lstlisting}[language={}]
+{'nbqbits': 28, 'size': 258, 'gate_size': 2547}
 0.33333333333333304 |1>
 0.3333333333333331  |2>
 0.3333333333333329  |3>
 \end{lstlisting}
 
-The output is perfectly flat. No amplitude amplification occurs.
-
 % -----------------------------------------------------------------------
-\section{Modification 1 -- Fix Reflection Logic (2026-03-17)}
+\section*{Modification 1 -- Fix Reflection Logic}
 % -----------------------------------------------------------------------
 
-\label{sec:mod1}
+Reflection B was corrected: added the update of \texttt{wstate\_zeros}
+(the $\omega'$ register) symmetrically with \texttt{wstate\_ones}, and
+added the corresponding X-gate flips before and after the controlled-Z.
 
-\textbf{Commit:} \texttt{475436d} (``Fix reflection logic and set k default
-to 1'')
-
-\subsection{Change Made}
-
-The original reflection in the QPE walk loop controlled the phase-flip only
-on the $\omega$ register (size $k$). This commit corrected the reflection
-to also consider the $\omega'$ register (size $n-k$) and fixed the default
-value of $k$ to 1 in the CLI interface.
-
-\begin{lstlisting}[caption={Before (reflection A only, original)}]
+\begin{lstlisting}[language=Python]
+# Before: only controlled on wstate_ones (size k)
 prw.apply(Z.ctrl(k), qpe_s[qw_iter], wstate_ones)
-\end{lstlisting}
 
-\begin{lstlisting}[caption={After (Reflection A and B, fixed)}]
+# After: Ref A controlled on wstate_ones, Ref B controlled on wstate_zeros
+# Ref A
+for j in range(k):
+    prw.apply(X, wstate_ones[j])
 prw.apply(Z.ctrl(k), qpe_s[qw_iter], wstate_ones)
-# ... Reflection B added:
+for j in range(k):
+    prw.apply(X, wstate_ones[j])
+prw.apply(qrw_update, ...)
+# Ref B
+prw.apply(qrw_update.dag(), node_s_zeros, node_s_ones, ...)
+for j in range(n - k):
+    prw.apply(X, wstate_zeros[j])
 prw.apply(Z.ctrl(n - k), qpe_s[qw_iter], wstate_zeros)
+for j in range(n - k):
+    prw.apply(X, wstate_zeros[j])
+prw.apply(qrw_update, node_s_zeros, node_s_ones, ...)
 \end{lstlisting}
 
-\subsection{Result}
-
-Flat distribution unchanged:
-
+\noindent\textbf{Result} (\texttt{test.txt}):
 \begin{lstlisting}[language={}]
-0.33333 |1>    0.33333 |2>    0.33333 |3>
+{'nbqbits': 28, 'size': 266, 'gate_size': 2537}
+0.33333333333333315 |1>
+0.3333333333333331  |2>
+0.3333333333333328  |3>
 \end{lstlisting}
 
 % -----------------------------------------------------------------------
-\section{Modification 2 -- MNRS Walk Restructuring (2026-03-20)}
+\section*{Modification 2 -- Remove Incorrect Cleanup Block}
 % -----------------------------------------------------------------------
 
-\label{sec:mod2}
+Inside the QPE walk loop there was a cleanup block that re-applied
+\texttt{copy\_register} and \texttt{generate} to reset $\alpha$ and
+$\omega$ before the QFT. This prematurely collapsed the walk superposition.
+The block was removed entirely.
 
-\textbf{Commits:} \texttt{cfc531a}, \texttt{dc93512}, \texttt{37b97eb},
-\texttt{3ebf794}, \texttt{37d6ce8} (all 2026-03-20, same working session)
-
-\subsection{Change Made}
-
-The code was substantially restructured to more closely match the MNRS paper
-description.  Key changes in this batch:
-
-\begin{enumerate}
-    \item \textbf{Manual diffuser} (\texttt{dc93512}): The diffusion step
-          (inversion around zero on the QPE register) was rewritten manually
-          instead of relying on a \texttt{compute} block, to prevent
-          accidental interference with the walk uncompute.
-
-    \item \textbf{Compute/uncompute for state prep} (\texttt{37b97eb}):
-          The initial state preparation (Dicke + VBE) was enclosed in a
-          \texttt{compute/uncompute} block to ensure clean uncomputation of
-          ancillas.
-
-    \item \textbf{Grover iteration QRoutine} (\texttt{37d6ce8}): The full
-          Grover iteration (oracle + walk + diffusion) was wrapped in its own
-          \texttt{QRoutine} to improve modularity.
-
-    \item \textbf{MNRS walk} (\texttt{cfc531a}): The main function was
-          refactored to globally construct the full MNRS walk, allocating all
-          registers as described in Table I of the paper and adding a
-          diagnostic script \texttt{cssp\_diagnostic.py}.
-\end{enumerate}
-
-\subsection{Result}
-
-Flat distribution unchanged across all variants tested in this session.
-
-% -----------------------------------------------------------------------
-\section{Modification 3 -- Preserve Walk State (2026-03-20)}
-% -----------------------------------------------------------------------
-
-\label{sec:mod3}
-
-\textbf{Commit:} \texttt{7e4e8a3} (``Preserve walk state and fix prep gate
-generation'')
-
-\subsection{Change Made}
-
-A cleanup block that was prematurely deallocating the $\alpha$ and $\omega$
-registers was \emph{commented out}. The block was originally intended to
-reset ancillas after each walk step, but doing so collapsed the entangled
-walk state (the edge superposition required for QFT/QPE).
-
-\begin{lstlisting}[caption={Removed cleanup block (code/cssp.py, ~line 156)}]
-# REMOVED: This was prematurely uncomputing the coin state
+\begin{lstlisting}[language=Python]
+# REMOVED (was collapsing the walk state before QFT):
 # for j in range(k):
 #     prw.apply(copy_register(m).ctrl(), wstate_ones[j],
 #               node_s_ones[j], alpha_ones)
+# for j in range(n - k):
+#     prw.apply(copy_register(m).ctrl(), wstate_zeros[j],
+#               node_s_zeros[j], alpha_zeros)
 # prw.apply(generate(k, 1), wstate_ones)
-# ... similar for zeros
+# prw.apply(generate(n - k, 1), wstate_zeros)
 \end{lstlisting}
 
-\subsection{Result}
-
-Flat distribution unchanged.
-
-% -----------------------------------------------------------------------
-\section{Modification 4 -- Remove Incorrect Cleanup (2026-03-23)}
-% -----------------------------------------------------------------------
-
-\label{sec:mod4}
-
-\textbf{Commit:} \texttt{44e3e0e} (``Remove incorrect cleanup and add test'')
-
-\subsection{Change Made}
-
-Building on the previous modification, the cleanup block was now \emph{fully
-removed} from the code (not just commented out). Additionally, a small test
-harness \texttt{test\_interf.py} was added to exercise the code path.
-
-The commit message explains:
-\begin{quote}
-\textit{``Remove a conceptually incorrect cleanup/uncompute block that forced
-deallocation of coin labels (alpha, wstate) and would collapse the walk
-superposition before QFT/QPE.''}
-\end{quote}
-
-\subsection{Result}
-
-Flat distribution unchanged.  Circuit size reduced slightly (from 266 gates
-to 140 gates in the 1-iteration version), but the output probabilities were
-identical.
-
+\noindent\textbf{Result} (\texttt{test2.txt}):
 \begin{lstlisting}[language={}]
-{'size': 140, 'gate_size': 1359}
-0.33333 |1>    0.33333 |2>    0.33333 |3>
+DEBUG: Search space N=3, performing 1 Grover iterations
+{'nbqbits': 28, 'size': 140, 'gate_size': 1359}
+0.33333333333333315 |1>
+0.3333333333333331  |2>
+0.3333333333333332  |3>
 \end{lstlisting}
 
 % -----------------------------------------------------------------------
-\section{Modification 5 -- Insert Low-Width and Reversibility Debug (2026-03-22)}
+\section*{Modification 3 -- Switch to \texttt{insert\_lw}}
 % -----------------------------------------------------------------------
 
-\label{sec:mod5}
+Changed the insertion operator from \texttt{insert\_ld} (low-depth) to
+\texttt{insert\_lw} (low-width) to match the paper's preferred
+implementation and to verify the deletion is using the correct inverse.
 
-\textbf{Commit:} \texttt{21b2b0f} (``Add reversibility debug scripts; use
-insert\_lw'')
-
-\subsection{Change Made}
-
-\begin{itemize}
-    \item Switched the insertion operator from \texttt{insert\_ld}
-          (low-depth) to \texttt{insert\_lw} (low-width), matching the
-          paper's preferred low-qubit implementation.
-    \item Added two debug scripts:
-          \texttt{cssp\_debug\_reversibility.py} and
-          \texttt{cssp\_debug\_reversibility\_incremental.py} to
-          independently verify that $U_U^\dagger U_U = I$ (the update
-          operator is unitary and reversible).
-\end{itemize}
-
-\subsection{Result}
-
-Reversibility tests confirmed that $U_U$ is correctly unitary. Final
-simulation result: still flat.
-
-% -----------------------------------------------------------------------
-\section{Modification 6 -- Debug State Simulator with Checkpoints (2026-03-25)}
-% -----------------------------------------------------------------------
-
-\label{sec:mod6}
-
-\textbf{Commit:} \texttt{b42de57} (``Enhance debug state simulator and add
-test'')
-
-\subsection{Change Made}
-
-A full intermediate-state debugger was added as function
-\texttt{simulate\_and\_print\_state()}.  Six checkpoints were inserted into
-the main circuit to inspect amplitudes and probabilities at each key stage:
-
-\begin{enumerate}
-    \item Init State (after Dicke + VBE)
-    \item Edge Superposition (after first $U_U$)
-    \item Post-Oracle (after $U_f$)
-    \item Post-QPE (after QFT)
-    \item Post-Diffusion (after inversion around zero)
-    \item End of Grover Iteration (after uncompute)
-\end{enumerate}
-
-\subsection{Result}
-
-\textbf{Output file:} \texttt{test\_finale3.txt} (first attempt) and
-\texttt{test\_finale4.txt} (working version).
-
-The first attempt failed at all checkpoints with:
-\begin{lstlisting}[language={}]
-Failed to simulate intermediate state: Cannot interpret
-'<qat.lang.AQASM.bits.Qbit object at 0x...>' as a data type
-\end{lstlisting}
-
-After fixing the intermediate simulation code, \texttt{test\_finale4.txt}
-showed the following key observations:
-
-\medskip
-\noindent\textbf{Checkpoint 3 (Post-Oracle):} Phase flip is correctly applied
-to the marked state. States with $\text{Sum} = 3$ (the target) show a sign
-flip on their amplitude ($-0.2887$ instead of $+0.2887$):
-
-\begin{lstlisting}[language={}, caption={Checkpoint 3 -- oracle is working}]
-Prob: 0.08333 | Ampl: +0.2887  ... S_1:1  Sum:|3    <- unmarked
-Prob: 0.08333 | Ampl: -0.2887  ... S_1:1  Sum:|3    <- MARKED (phase flip)
-\end{lstlisting}
-
-\noindent\textbf{Checkpoint 6 (End of Grover Iteration):} After the
-complete Grover step (oracle + walk + QPE + diffusion + uncompute), the
-amplitudes are mixed in sign but the probabilities remain \emph{equal}:
-
-\begin{lstlisting}[language={}, caption={Checkpoint 6 -- no amplification}]
-Prob: 0.08333 | Ampl: -0.2887  ... S_1:0  Sum:|0
-Prob: 0.08333 | Ampl: +0.2887  ... S_1:1  Sum:|2
-Prob: 0.08333 | Ampl: -0.2887  ... S_1:1  Sum:|2
-...
-\end{lstlisting}
-
-\noindent The final measurement (over register $S$ only) remains:
-\begin{lstlisting}[language={}]
-0.33333 |1>    0.33333 |2>    0.33333 |3>
-\end{lstlisting}
-
-The oracle is correctly marking the solution, but the diffusion step does
-not succeed in amplifying it.
-
-% -----------------------------------------------------------------------
-\section{Modification 7 -- Spectral Gap Clamping and Minimum QPE Precision (2026-03-27)}
-% -----------------------------------------------------------------------
-
-\label{sec:mod7}
-
-\textbf{Commit:} \texttt{51799b8} (``Bound spectral gap and require min QPE
-precision'')
-
-\subsection{Change Made}
-
-Two numerical bugs were fixed:
-
-\begin{enumerate}
-    \item \textbf{Spectral gap overflow:} For small instances ($n=3$,
-          $k=1$), the theoretical spectral gap formula gives
-          $\delta = 3/(1 \cdot 2) = 1.5 > 1$, which is physically
-          impossible for a normalized random walk.  The formula was clamped:
-
-\begin{lstlisting}[caption={Spectral gap fix}]
+\begin{lstlisting}[language=Python]
 # Before:
-delta = n / (k * (n - k))
+insert = insert_ld
 
 # After:
-delta = min(n / (k * (n - k)), 1.0)
+insert = insert_lw if low_width else insert_ld
 \end{lstlisting}
 
-    \item \textbf{QPE precision too low:} The unclamped $\delta = 1.5$
-          caused $\ell_s = \lceil\log_2(\pi/(2\sqrt{1.5}))\rceil = 0$,
-          which rounded to 1 QPE qubit.  A 1-qubit QPE can only distinguish
-          phases $0$ and $\pi$, which is insufficient for the Szegedy walk
-          coherence.  A minimum of 3 qubits was enforced:
+\noindent\textbf{Result} (\texttt{test\_finale2.txt}):
+\begin{lstlisting}[language={}]
+{'nbqbits': 28, 'size': 147, 'gate_size': 1366}
+0.33333333333333315 |1>
+0.3333333333333331  |2>
+0.33333333333333326 |3>
+\end{lstlisting}
 
-\begin{lstlisting}[caption={QPE minimum qubits fix}]
+% -----------------------------------------------------------------------
+\section*{Modification 4 -- Spectral Gap Clamping and Minimum QPE Qubits}
+% -----------------------------------------------------------------------
+
+For $n=3$, $k=1$, the formula gives $\delta = 1.5 > 1$, which is
+physically invalid. Also, $\ell_s$ computed from unclamped $\delta$
+evaluates to 0 (i.e., 1 qubit QPE), insufficient for Szegedy coherence.
+
+\begin{lstlisting}[language=Python]
 # Before:
+delta = n / (k * (n - k))
 len_s = int(np.ceil(np.log2(np.pi / (2 * np.sqrt(delta)))))
 
 # After:
+delta = min(n / (k * (n - k)), 1.0)
 len_s = max(int(np.ceil(np.log2(np.pi / (2 * np.sqrt(delta))))), 3)
 \end{lstlisting}
-\end{enumerate}
 
-\subsection{Result}
-
-\textbf{Output files:} \texttt{test\_finale4.txt}
-
-Flat distribution unchanged:
+\noindent\textbf{Result} (\texttt{test\_finale4.txt} -- same flat output):
 \begin{lstlisting}[language={}]
 DEBUG: Search space N=3, performing 1 Grover iterations
-0.33333 |1>    0.33333 |2>    0.33333 |3>
+{'nbqbits': 28, 'size': 147, 'gate_size': 1366}
+0.33333333333333315 |1>
+0.3333333333333331  |2>
+0.33333333333333326 |3>
 \end{lstlisting}
 
 % -----------------------------------------------------------------------
-\section{Modification 8 -- Grover Iteration Count Fix (2026-03-24)}
+\section*{Modification 5 -- Correct Grover Iteration Count}
 % -----------------------------------------------------------------------
 
-\label{sec:mod8}
+The outer loop count was changed from $\lceil\sqrt{N}\rceil$ (which gives 2
+for $N=3$, causing over-rotation) to the optimal Grover count
+$\lfloor\frac{\pi}{4}\sqrt{N}\rfloor$ (which gives 1 for $N=3$).
 
-\textbf{Commit:} \texttt{200a954} / \texttt{b505219} (``Update cssp.py'',
-2026-03-24/25)
-
-\subsection{Change Made}
-
-The number of outer Grover iterations was corrected from
-$\lceil\sqrt{N}\rceil$ to the optimal Grover count
-$\lfloor\frac{\pi}{4}\sqrt{N}\rfloor$:
-
-\begin{lstlisting}[caption={Grover iteration count fix}]
+\begin{lstlisting}[language=Python]
 # Before:
 n_external_iters = int(np.ceil(np.sqrt(comb(n, k))))
 
@@ -487,34 +211,16 @@ if n_external_iters == 0 and N_search_space > 1:
     n_external_iters = 1
 \end{lstlisting}
 
-For $N = \binom{3}{1} = 3$, the old formula gave 2 iterations while the
-correct Grover count is 1.  Two Grover iterations on $N=3$ cause
-over-rotation (approximately $180°$) and return the state to the uniform
-distribution.
-
-\subsection{Result}
-
-Flat distribution unchanged, even with the corrected iteration count:
-\begin{lstlisting}[language={}]
-DEBUG: Search space N=3, performing 1 Grover iterations
-0.33333 |1>    0.33333 |2>    0.33333 |3>
-\end{lstlisting}
+\noindent\textbf{Result}: flat, same as above.
 
 % -----------------------------------------------------------------------
-\section{Modification 9 -- QPE Walk Loop Exponential Scaling (2026-03-24)}
+\section*{Modification 6 -- QPE Walk Loop Exponential Scaling}
 % -----------------------------------------------------------------------
 
-\label{sec:mod9}
+Standard QPE requires the walk operator $W$ to be applied $2^j$ times for
+the $j$-th QPE qubit. The original code applied it once per qubit.
 
-\textbf{Commit:} \texttt{8531245} (``Update cssp.py'', 2026-03-24)
-
-\subsection{Change Made}
-
-In the MNRS QPE-based reflection, the walk operator $W = U_U^{-1} R_A U_U
-R_B$ must be applied $2^j$ times for the $j$-th QPE qubit (binary phase
-kickback). The original code applied it exactly once per QPE qubit:
-
-\begin{lstlisting}[caption={QPE exponential scaling fix}]
+\begin{lstlisting}[language=Python]
 # Before (one application per QPE qubit):
 for qw_iter in range(len_s):
     prw.apply(qrw_update.dag(), ...)
@@ -529,316 +235,151 @@ for qw_iter in range(len_s):
         prw.apply(qrw_update, ...)
 \end{lstlisting}
 
-\subsection{Result}
-
-Flat distribution unchanged.
+\noindent\textbf{Result}: flat, same as above.
 
 % -----------------------------------------------------------------------
-\section{Modification 10 -- Inverse QFT (2026-04-13)}
+\section*{Modification 7 -- Inverse QFT}
 % -----------------------------------------------------------------------
 
-\label{sec:mod10}
+QPE requires the \emph{inverse} QFT. The original code used the forward QFT.
 
-\textbf{Commit:} \texttt{bf13d21} (``Use inverse QFT and add QPE diffusion
-test'')
-
-\subsection{Change Made}
-
-Standard QPE requires the \emph{inverse} QFT to convert accumulated phases
-into a binary readout. The original code applied the \emph{forward} QFT
-($\text{QFT}$), which rotates in the wrong direction and destroys the
-phase information:
-
-\begin{lstlisting}[caption={QFT direction fix}]
-# Before (forward QFT -- WRONG direction for QPE):
+\begin{lstlisting}[language=Python]
+# Before:
 prw.apply(QFT(len_s), qpe_s)
 
-# After (inverse QFT -- correct for QPE readout):
+# After:
 prw.apply(QFT(len_s).dag(), qpe_s)
 \end{lstlisting}
 
-A companion test file \texttt{test\_qpe\_diffusion.py} was added to verify
-the QPE + diffusion sub-circuit in isolation.
-
-\subsection{Result}
-
-Flat distribution unchanged:
+\noindent\textbf{Result} (\texttt{risultato\_simulazione5\_uguale\_ma\_aggiornato.txt}):
 \begin{lstlisting}[language={}]
-0.33333 |1>    0.33333 |2>    0.33333 |3>
+{'nbqbits': 28, 'size': 262, 'gate_size': 2551}
+0.3333333333333331 |1>
+0.3333333333333331 |2>
+0.333333333333333  |3>
+(runtime: 12h 30min CPU)
 \end{lstlisting}
 
 % -----------------------------------------------------------------------
-\section{Modification 11 -- Dicke Register Uncomputation (2026-03-24)}
+\section*{Modification 8 -- Dicke Register Uncomputation}
 % -----------------------------------------------------------------------
 
-\label{sec:mod11}
+After VBE, the $\sigma$ register remains entangled with $S$, acting as a
+which-path observer. A dedicated routine was added to uncompute $\sigma$
+to $|0\rangle^n$ using the content of $S$.
 
-\textbf{Commit:} \texttt{70dfe4d} (``Update cssp.py'', 2026-03-24) and
-following commits
-
-\subsection{Change Made}
-
-After the VBE step, the $\sigma$ (Dicke) register encodes \emph{which}
-subset has been loaded into $S$. If $\sigma$ is left entangled with $S$,
-it acts as an environment observer and causes decoherence -- the quantum
-walk cannot create superposition over different vertices because the which-path
-information is still present in $\sigma$.
-
-A dedicated routine \texttt{build\_uncompute\_dicke\_from\_values()} was
-added to fully uncompute $\sigma$ to $|0\rangle^{\otimes n}$ using the
-content of $S$:
-
-\begin{lstlisting}[caption={Dicke uncomputation routine (simplified)}]
-def build_uncompute_dicke_from_values(n, k, m, values):
-    qrout = QRoutine()
-    s_ones = qrout.new_wires(k * m)
-    dicke  = qrout.new_wires(n)
-    for x in range(k):
-        s_target_reg = s_ones[x*m : (x+1)*m]
-        for i in range(n):
-            val = values[i]
-            # Flip 0-bits of S[x] to match value[i]
-            for bit_idx in range(m):
-                if (val & (1 << bit_idx)) == 0:
-                    qrout.apply(X, s_target_reg[bit_idx])
-            # Multi-controlled NOT: flip dicke[i] if S[x] == values[i]
-            qrout.apply(X.ctrl(m), s_target_reg, dicke[i])
-            # Restore S[x]
-            for bit_idx in range(m):
-                if (val & (1 << bit_idx)) == 0:
-                    qrout.apply(X, s_target_reg[bit_idx])
-    return qrout
-\end{lstlisting}
-
-This is applied immediately after VBE, before the first $U_U$:
-
-\begin{lstlisting}
+\begin{lstlisting}[language=Python]
+# After Dicke + VBE:
 prw.apply(generate(n, k), dicke)
-prw.apply(bix.bix_matrix_compile_time(...), dicke, node_s_ones, node_s_zeros)
-# NEW: uncompute dicke to remove entanglement
+prw.apply(bix.bix_matrix_compile_time(n, 1, m, k, sorted_values),
+          dicke, node_s_ones, node_s_zeros)
+
+# NEW: uncompute dicke register
+inv_dicke_rout = build_uncompute_dicke_from_values(n, k, m, sorted_values)
+flat_s_ones = [q for reg in node_s_ones for q in list(reg)]
 prw.apply(inv_dicke_rout, flat_s_ones, dicke)
 \end{lstlisting}
 
-\subsection{Result}
-
-Flat distribution unchanged.
+\noindent\textbf{Result}: flat, same as above.
 
 % -----------------------------------------------------------------------
-\section{Modification 12 -- Reflection B with Swapped S/T Registers (2026-03-25)}
+\section*{Modification 9 -- Reflection B: Swap S$\leftrightarrow$T Registers}
 % -----------------------------------------------------------------------
 
-\label{sec:mod12}
+Reflection B should project from the perspective of the \emph{adjacent}
+vertex, so $U_U$ must be applied with $T$ acting as source (swapped with
+$S$). Also changed the controlled-Z to act jointly on both $\omega$ and
+$\omega'$ (full $n$-qubit control).
 
-\textbf{Commit:} \texttt{b505219} and subsequent commits; result in
-\texttt{result\_with\_modified\_reflection\_b\_swapped.txt}
-
-\subsection{Change Made}
-
-In the MNRS walk, Reflection B should project onto the edge space as seen
-from the \emph{adjacent} vertex $v'$.  This means $U_U$ should be applied
-with $S$ and $T$ \emph{swapped} -- i.e., the adjacent-vertex register $T$
-is treated as the source:
-
-\begin{lstlisting}[caption={Reflection B register swap}]
-# Before (Reflection B, wrong register order):
+\begin{lstlisting}[language=Python]
+# Before (Ref B with S' as source, controlled on wstate_zeros only):
 prw.apply(qrw_update.dag(),
-          node_s_zeros, node_s_ones,   # S' first, then S
-          node_t_zeros, node_t_ones,
-          alpha_zeros, alpha_ones,
-          wstate_zeros, wstate_ones)
+          node_s_zeros, node_s_ones, node_t_zeros, node_t_ones,
+          alpha_zeros, alpha_ones, wstate_zeros, wstate_ones)
 prw.apply(Z.ctrl(n - k), qpe_s[qw_iter], wstate_zeros)
-# ...
-prw.apply(qrw_update, node_s_zeros, node_s_ones, ...)
+prw.apply(qrw_update,
+          node_s_zeros, node_s_ones, ...)
 
-# After (Reflection B, correct: T acts as the "source"):
+# After (Ref B with T as source, joint control on wstate_ones + wstate_zeros):
 prw.apply(qrw_update.dag(),
-          node_t_ones, node_t_zeros,   # T first, then S
-          node_s_ones, node_s_zeros,
-          alpha_ones, alpha_zeros,
-          wstate_ones, wstate_zeros)
+          node_t_ones, node_t_zeros, node_s_ones, node_s_zeros,
+          alpha_ones, alpha_zeros, wstate_ones, wstate_zeros)
+for j in range(k):
+    prw.apply(X, wstate_ones[j])
+for j in range(n - k):
+    prw.apply(X, wstate_zeros[j])
 prw.apply(Z.ctrl(n), qpe_s[qw_iter], wstate_ones, wstate_zeros)
-# ...
+for j in range(k):
+    prw.apply(X, wstate_ones[j])
+for j in range(n - k):
+    prw.apply(X, wstate_zeros[j])
 prw.apply(qrw_update,
           node_t_ones, node_t_zeros, node_s_ones, node_s_zeros, ...)
 \end{lstlisting}
 
-Additionally, the control on the reflection phase-flip gate was changed from
-$Z^\text{ctrl}(k)$ (control on $\omega$ only) to $Z^\text{ctrl}(n)$ (joint
-control on both $\omega$ and $\omega'$).
-
-\subsection{Result}
-
-\textbf{Output file:} \texttt{result\_with\_modified\_reflection\_b\_swapped.txt}
-
-Flat distribution unchanged:
+\noindent\textbf{Result} (\texttt{result\_with\_modified\_reflection\_b\_swapped.txt}):
 \begin{lstlisting}[language={}]
-{'size': 286, 'gate_size': 2581}
+{'nbqbits': 28, 'size': 286, 'gate_size': 2581}
 0.33333333333333315 |1>
 0.3333333333333331  |2>
 0.3333333333333328  |3>
-Runtime: 11h 37min (CPU)
+(runtime: 11h 37min CPU)
 \end{lstlisting}
 
 % -----------------------------------------------------------------------
-\section{Additional Test -- k=2 Case}
+\section*{Modification 10 -- Test with $k=2$}
 % -----------------------------------------------------------------------
 
-\label{sec:k2test}
+Same code (with all above modifications) tested on a different instance:
+$n=3$, $k=2$, \texttt{values=[1,2,3]}, \texttt{target\_sum=5}.
+The unique solution is $\{2,3\}$.
 
-\textbf{Output file:} \texttt{risultato\_simulazione4\_aggiornato\_reflection\_b.txt}
-
-The same modifications were tested with $n=3$, $k=2$, values $= [1,2,3]$,
-target sum $= 5$ (unique solution: $\{2,3\}$).
-
+\noindent\textbf{Result} (\texttt{risultato\_simulazione4\_aggiornato\_reflection\_b.txt}):
 \begin{lstlisting}[language={}]
-n 3, k 2, m 2, values [1, 2, 3], target sum = 5
-{'nbqbits': 29, 'gate_size': 2630}
-0.3333333333333329 |1>|2>
+{'nbqbits': 29, 'size': 266, 'gate_size': 2630}
+0.3333333333333329  |1>|2>
 0.33333333333333315 |1>|3>
-0.3333333333333331 |2>|3>
-Runtime: 20h 29min (CPU)
+0.3333333333333331  |2>|3>
+(runtime: 20h 29min CPU)
 \end{lstlisting}
 
-The flat distribution persists even for $k=2$.
-
 % -----------------------------------------------------------------------
-\section{Summary of All Modifications}
+\section*{Amplitude Checkpoint Analysis}
 % -----------------------------------------------------------------------
 
-\begin{center}
-\begin{longtable}{p{0.05\textwidth} p{0.15\textwidth} p{0.42\textwidth} p{0.25\textwidth}}
-\toprule
-\# & Commit / Date & Modification & Result \\
-\midrule
-\endfirsthead
-\multicolumn{4}{l}{\small (continued from previous page)} \\
-\toprule
-\# & Commit / Date & Modification & Result \\
-\midrule
-\endhead
-\bottomrule
-\endfoot
+A full intermediate-state debugger was added with 6 checkpoints to inspect
+amplitudes at each stage. Output from \texttt{test\_finale4.txt}:
 
-0 & \texttt{c669fd9} \newline 2026-03-08 & Baseline: original code from paper & Flat: 0.333/0.333/0.333 \\
-\addlinespace
-1 & \texttt{475436d} \newline 2026-03-17 & Fix reflection logic: add Ref B controlled on $\omega'$ & Flat \\
-\addlinespace
-2 & \texttt{cfc531a} \newline 2026-03-20 & Refactor to full MNRS walk structure & Flat \\
-\addlinespace
-3 & \texttt{7e4e8a3} \newline 2026-03-20 & Comment out premature $\alpha$/$\omega$ cleanup & Flat \\
-\addlinespace
-4 & \texttt{44e3e0e} \newline 2026-03-23 & Remove cleanup block entirely; add test & Flat (140 gates) \\
-\addlinespace
-5 & \texttt{21b2b0f} \newline 2026-03-22 & Switch to \texttt{insert\_lw}; add reversibility tests & Flat (reversibility OK) \\
-\addlinespace
-6 & \texttt{b42de57} \newline 2026-03-25 & Add 6-checkpoint amplitude debugger & Flat; oracle works, diffusion fails \\
-\addlinespace
-7 & \texttt{51799b8} \newline 2026-03-27 & Clamp $\delta \le 1.0$; enforce $\ell_s \ge 3$ & Flat \\
-\addlinespace
-8 & \texttt{200a954} \newline 2026-03-24 & Fix Grover count: $\lfloor\frac{\pi}{4}\sqrt{N}\rfloor$ & Flat (1 iteration) \\
-\addlinespace
-9 & \texttt{8531245} \newline 2026-03-24 & Fix QPE loop: apply $W$ exactly $2^j$ times & Flat \\
-\addlinespace
-10 & \texttt{bf13d21} \newline 2026-04-13 & Use inverse QFT (\texttt{QFT.dag()}) & Flat \\
-\addlinespace
-11 & \texttt{70dfe4d} \newline 2026-03-24 & Uncompute Dicke register after VBE & Flat \\
-\addlinespace
-12 & \texttt{b505219} \newline 2026-03-25 & Reflection B: swap $S \leftrightarrow T$; joint control & Flat (12h runtime) \\
-\bottomrule
-\end{longtable}
-\end{center}
+\medskip
+\noindent\textbf{Checkpoint 1 -- Init State:} 6 states, all $p \approx 0.167$,
+all amplitudes $+0.408$. Preparation is uniform and correct.
 
-% -----------------------------------------------------------------------
-\section{Key Observations from Checkpoint Analysis}
-% -----------------------------------------------------------------------
+\medskip
+\noindent\textbf{Checkpoint 3 -- Post-Oracle:} Phase flip correctly applied to
+states with $\text{Sum}=3$. Oracle is working.
+\begin{lstlisting}[language={}]
+Prob: 0.08333 | Ampl: +0.2887 ... Sum:|3   <- not flipped
+Prob: 0.08333 | Ampl: -0.2887 ... Sum:|3   <- PHASE FLIPPED (marked)
+\end{lstlisting}
 
-\label{sec:observations}
+\medskip
+\noindent\textbf{Checkpoint 5 -- Post-Diffusion:} All probabilities remain
+$0.04167$. The diffusion does not amplify the marked state.
+\begin{lstlisting}[language={}]
+Prob: 0.04167 | Ampl: -0.2041 ...
+Prob: 0.04167 | Ampl: +0.2041 ...
+... (all same probability, mixed signs)
+\end{lstlisting}
 
-The amplitude-level debug introduced in Modification~6 (Section~\ref{sec:mod6})
-allows us to localize where the algorithm breaks down.  The following table
-summarises what each checkpoint shows in the \emph{final} code version
-(output file \texttt{test\_finale4.txt}):
+\medskip
+\noindent\textbf{Final measurement:}
+\begin{lstlisting}[language={}]
+0.33333 |1>    0.33333 |2>    0.33333 |3>
+\end{lstlisting}
 
-\begin{center}
-\begin{tabular}{p{0.08\textwidth} p{0.2\textwidth} p{0.55\textwidth}}
-\toprule
-CP & Stage & Observation \\
-\midrule
-1 & Init State & 6 states with equal probability $\approx 0.167$; amplitudes all $+0.408$ \\
-2 & Edge Superposition & 12 states with equal probability $\approx 0.083$; amplitudes all $+0.289$ \\
-3 & Post-Oracle & 12 states; 4 states with $\text{Sum}=3$ have amplitude sign flipped to $-0.289$ -- \textbf{oracle is correct} \\
-4 & Post-QPE & 24 states; amplitudes alternate $\pm 0.204$ -- QPE introduces phase spread \\
-5 & Post-Diffusion & 24 states; amplitudes still $\pm 0.204$ -- \textbf{diffusion leaves all probabilities unchanged} \\
-6 & End of Grover & 12 states; amplitudes $\pm 0.289$ -- uncompute merges states back; still uniform \\
-\bottomrule
-\end{tabular}
-\end{center}
-
-The critical failure point is \textbf{Checkpoint 5} (Post-Diffusion): the
-inversion around zero does not change any probabilities.  This suggests that
-the QPE register does not encode a distribution with a non-zero mean after
-the phase flip, which would be required for the inversion to amplify the
-marked state.
-
-% -----------------------------------------------------------------------
-\section{Conclusion}
-% -----------------------------------------------------------------------
-
-Despite twelve substantive modifications to the simulation code --
-addressing the spectral gap, QPE precision, QFT direction, Grover iteration
-count, walk loop exponential scaling, reflection register ordering, Dicke
-register decoherence, and oracle phase convention -- the final probability
-distribution remains perfectly flat for all tested instances:
-
-\begin{itemize}
-    \item $n=3$, $k=1$, target $= 3$: probabilities $\{1/3, 1/3, 1/3\}$
-    \item $n=3$, $k=2$, target $= 5$: probabilities $\{1/3, 1/3, 1/3\}$
-\end{itemize}
-
-The checkpoint analysis confirms that:
-\begin{enumerate}
-    \item The initial state preparation is correct.
-    \item The oracle correctly marks the solution with a phase flip.
-    \item The QPE spreads phases across the QPE register.
-    \item The diffusion step does \emph{not} amplify: it leaves all
-          probabilities unchanged.
-\end{enumerate}
-
-This indicates that the problem lies in the QPE-based approximate reflection:
-the Szegedy walk eigenphases are not being correctly encoded into the QPE
-register in a form that the Grover diffusion can exploit.  Possible remaining
-issues not yet resolved include:
-\begin{itemize}
-    \item The Szegedy walk $W = U_U^{-1} R_A U_U R_B$ may not be correctly
-          assembled (incorrect operator ordering or sign convention in
-          Reflections A and B).
-    \item The QPE register may not be properly initialised or may not receive
-          the correct eigenphase encoding from $W$.
-    \item The uncompute block after the diffusion may be reversing the
-          amplification gain.
-\end{itemize}
-
-We submit this report to the paper authors in the hope that they can identify
-the root cause of the flat distribution in the simulation.
-
-% -----------------------------------------------------------------------
-\begin{thebibliography}{9}
-
-\bibitem{mnrs}
-F.~Magniez, A.~Nayak, J.~Roland, M.~Santha,
-\textit{Search via Quantum Walk},
-SIAM Journal on Computing, 40(1):142--164, 2011.
-
-\bibitem{paper}
-Lancellotti et al.,
-\textit{Solving the Subset Sum Problem via Quantum Walk Search},
-IEEE Transactions on Computers, 2025.
-
-\bibitem{bartschi}
-A.~Bartschi, S.~Eidenbenz,
-\textit{Deterministic Preparation of Dicke States},
-FCT 2019.
-
-\end{thebibliography}
+\medskip\noindent
+The oracle marks the solution correctly. The problem lies in the
+QPE-based approximate reflection: the Szegedy walk phases are not
+encoded into the QPE register in a form that the Grover diffusion can exploit.
 
 \end{document}
