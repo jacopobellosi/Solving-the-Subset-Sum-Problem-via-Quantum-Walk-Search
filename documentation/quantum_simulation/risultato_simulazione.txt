@@ -1,8 +1,0 @@
-nohup: ignoring input
-Traceback (most recent call last):
-  File "/home/icse/Bellosi_quantum_test/2025-TC/cssp.py", line 3, in <module>
-    import numpy as np
-ModuleNotFoundError: No module named 'numpy'
-Command exited with non-zero status 1
-0.37user 0.09system 0:00.47elapsed 99%CPU (0avgtext+0avgdata 31208maxresident)k
-0inputs+8outputs (0major+4457minor)pagefaults 0swaps

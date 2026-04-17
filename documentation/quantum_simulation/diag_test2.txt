@@ -1,8 +1,0 @@
-nohup: ignoring input
-TEST 2: Preparation + Oracle
-
-=== After Oracle (phases flipped, probabilities unchanged) ===
-  Qubits: 28, Gates: 198
-  P=0.333333  State=|1>
-  P=0.333333  State=|2>
-  P=0.333333  State=|3>

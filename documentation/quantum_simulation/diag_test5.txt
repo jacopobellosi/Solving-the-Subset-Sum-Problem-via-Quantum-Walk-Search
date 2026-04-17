@@ -1,3 +1,0 @@
-nohup: ignoring input
-TEST 5: Grover with VBE diffuser (QRoutine compute/uncompute)
-  LINKER ERROR: '_13'

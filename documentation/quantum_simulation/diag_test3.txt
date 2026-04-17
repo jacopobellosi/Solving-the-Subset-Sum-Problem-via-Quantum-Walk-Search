@@ -1,8 +1,0 @@
-nohup: ignoring input
-TEST 3: Preparation + Oracle + Ref A (no QPE control)
-
-=== After unconditional Ref A ===
-  Qubits: 28, Gates: 487
-  P=0.333333  State=|1>
-  P=0.333333  State=|2>
-  P=0.333333  State=|3>
