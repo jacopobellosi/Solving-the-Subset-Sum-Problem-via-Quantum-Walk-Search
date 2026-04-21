@@ -1,0 +1,299 @@
+nohup: ignoring input
+To simulate is True
+n 3, k 1, m 2, values [1, 2, 3], target sum = 3
+
+--- Checkpoint: [1] Preparation (Dicke + VBE) ---
+  Prob: 0.16667 | Ampl: +0.4082+0.0000j | Dicke:0>| | S_1:0> | S_0:|1>| | QPE:> | Sum:|0
+  Prob: 0.16667 | Ampl: +0.4082+0.0000j | Dicke:0>| | S_1:0> | S_0:|1>| | QPE:> | Sum:|0
+  Prob: 0.16667 | Ampl: +0.4082+0.0000j | Dicke:0>| | S_1:1> | S_0:|0>| | QPE:> | Sum:|0
+  Prob: 0.16667 | Ampl: +0.4082+0.0000j | Dicke:0>| | S_1:1> | S_0:|0>| | QPE:> | Sum:|0
+  Prob: 0.16667 | Ampl: +0.4082+0.0000j | Dicke:1>| | S_1:0> | S_0:|0>| | QPE:> | Sum:|0
+  Prob: 0.16667 | Ampl: +0.4082+0.0000j | Dicke:1>| | S_1:0> | S_0:|0>| | QPE:> | Sum:|0
+  Total states: 6
+
+--- Checkpoint: [2] Edge Superposition (after U_U) ---
+  Prob: 0.08333 | Ampl: +0.2887+0.0000j | Dicke:0>| | S_1:0> | S_0:|1>| | QPE:> | Sum:|2
+  Prob: 0.08333 | Ampl: +0.2887+0.0000j | Dicke:0>| | S_1:0> | S_0:|1>| | QPE:> | Sum:|2
+  Prob: 0.08333 | Ampl: +0.2887+0.0000j | Dicke:0>| | S_1:0> | S_0:|1>| | QPE:> | Sum:|2
+  Prob: 0.08333 | Ampl: +0.2887+0.0000j | Dicke:0>| | S_1:0> | S_0:|1>| | QPE:> | Sum:|2
+  Prob: 0.08333 | Ampl: +0.2887+0.0000j | Dicke:0>| | S_1:1> | S_0:|0>| | QPE:> | Sum:|3
+  Prob: 0.08333 | Ampl: +0.2887+0.0000j | Dicke:0>| | S_1:1> | S_0:|0>| | QPE:> | Sum:|3
+  Prob: 0.08333 | Ampl: +0.2887+0.0000j | Dicke:0>| | S_1:1> | S_0:|0>| | QPE:> | Sum:|3
+  Prob: 0.08333 | Ampl: +0.2887+0.0000j | Dicke:0>| | S_1:1> | S_0:|0>| | QPE:> | Sum:|3
+  Prob: 0.08333 | Ampl: +0.2887+0.0000j | Dicke:1>| | S_1:0> | S_0:|0>| | QPE:> | Sum:|3
+  Prob: 0.08333 | Ampl: +0.2887+0.0000j | Dicke:1>| | S_1:0> | S_0:|0>| | QPE:> | Sum:|3
+  Prob: 0.08333 | Ampl: +0.2887+0.0000j | Dicke:1>| | S_1:0> | S_0:|0>| | QPE:> | Sum:|3
+  Prob: 0.08333 | Ampl: +0.2887+0.0000j | Dicke:1>| | S_1:0> | S_0:|0>| | QPE:> | Sum:|3
+  Total states: 12
+
+--- Checkpoint: [iter 1] [3] Post-Oracle ---
+  Prob: 0.08333 | Ampl: +0.2887+0.0000j | Dicke:0>| | S_1:0> | S_0:|1>| | QPE:> | Sum:|2
+  Prob: 0.08333 | Ampl: +0.2887+0.0000j | Dicke:0>| | S_1:0> | S_0:|1>| | QPE:> | Sum:|2
+  Prob: 0.08333 | Ampl: +0.2887+0.0000j | Dicke:0>| | S_1:0> | S_0:|1>| | QPE:> | Sum:|2
+  Prob: 0.08333 | Ampl: +0.2887+0.0000j | Dicke:0>| | S_1:0> | S_0:|1>| | QPE:> | Sum:|2
+  Prob: 0.08333 | Ampl: +0.2887+0.0000j | Dicke:0>| | S_1:1> | S_0:|0>| | QPE:> | Sum:|3
+  Prob: 0.08333 | Ampl: +0.2887+0.0000j | Dicke:0>| | S_1:1> | S_0:|0>| | QPE:> | Sum:|3
+  Prob: 0.08333 | Ampl: -0.2887+0.0000j | Dicke:0>| | S_1:1> | S_0:|0>| | QPE:> | Sum:|3
+  Prob: 0.08333 | Ampl: -0.2887+0.0000j | Dicke:0>| | S_1:1> | S_0:|0>| | QPE:> | Sum:|3
+  Prob: 0.08333 | Ampl: +0.2887+0.0000j | Dicke:1>| | S_1:0> | S_0:|0>| | QPE:> | Sum:|3
+  Prob: 0.08333 | Ampl: +0.2887+0.0000j | Dicke:1>| | S_1:0> | S_0:|0>| | QPE:> | Sum:|3
+  Prob: 0.08333 | Ampl: -0.2887+0.0000j | Dicke:1>| | S_1:0> | S_0:|0>| | QPE:> | Sum:|3
+  Prob: 0.08333 | Ampl: -0.2887+0.0000j | Dicke:1>| | S_1:0> | S_0:|0>| | QPE:> | Sum:|3
+  Total states: 12
+
+--- Checkpoint: [iter 1] [4] Post-Ref A (qpe qubit 0) ---
+  Prob: 0.08333 | Ampl: +0.2887+0.0000j | Dicke:0>| | S_1:0> | S_0:|1>| | QPE:> | Sum:|2
+  Prob: 0.08333 | Ampl: -0.2887+0.0000j | Dicke:0>| | S_1:0> | S_0:|1>| | QPE:> | Sum:|2
+  Prob: 0.08333 | Ampl: +0.2887+0.0000j | Dicke:0>| | S_1:0> | S_0:|1>| | QPE:> | Sum:|2
+  Prob: 0.08333 | Ampl: -0.2887+0.0000j | Dicke:0>| | S_1:0> | S_0:|1>| | QPE:> | Sum:|2
+  Prob: 0.08333 | Ampl: +0.2887+0.0000j | Dicke:0>| | S_1:1> | S_0:|0>| | QPE:> | Sum:|3
+  Prob: 0.08333 | Ampl: -0.2887+0.0000j | Dicke:0>| | S_1:1> | S_0:|0>| | QPE:> | Sum:|3
+  Prob: 0.08333 | Ampl: -0.2887+0.0000j | Dicke:0>| | S_1:1> | S_0:|0>| | QPE:> | Sum:|3
+  Prob: 0.08333 | Ampl: +0.2887+0.0000j | Dicke:0>| | S_1:1> | S_0:|0>| | QPE:> | Sum:|3
+  Prob: 0.08333 | Ampl: +0.2887+0.0000j | Dicke:1>| | S_1:0> | S_0:|0>| | QPE:> | Sum:|3
+  Prob: 0.08333 | Ampl: -0.2887+0.0000j | Dicke:1>| | S_1:0> | S_0:|0>| | QPE:> | Sum:|3
+  Prob: 0.08333 | Ampl: -0.2887+0.0000j | Dicke:1>| | S_1:0> | S_0:|0>| | QPE:> | Sum:|3
+  Prob: 0.08333 | Ampl: +0.2887+0.0000j | Dicke:1>| | S_1:0> | S_0:|0>| | QPE:> | Sum:|3
+  Total states: 12
+
+--- Checkpoint: [iter 1] [5] Post-Ref B (qpe qubit 0) ---
+  Prob: 0.04167 | Ampl: -0.2041+0.0000j | Dicke:0>| | S_1:0> | S_0:|1>| | QPE:> | Sum:|2
+  Prob: 0.04167 | Ampl: +0.2041+0.0000j | Dicke:0>| | S_1:0> | S_0:|1>| | QPE:> | Sum:|2
+  Prob: 0.04167 | Ampl: +0.2041+0.0000j | Dicke:0>| | S_1:0> | S_0:|1>| | QPE:> | Sum:|2
+  Prob: 0.04167 | Ampl: +0.2041+0.0000j | Dicke:0>| | S_1:0> | S_0:|1>| | QPE:> | Sum:|2
+  Prob: 0.04167 | Ampl: +0.2041+0.0000j | Dicke:0>| | S_1:0> | S_0:|1>| | QPE:> | Sum:|2
+  Prob: 0.04167 | Ampl: -0.2041+0.0000j | Dicke:0>| | S_1:0> | S_0:|1>| | QPE:> | Sum:|2
+  Prob: 0.04167 | Ampl: +0.2041+0.0000j | Dicke:0>| | S_1:0> | S_0:|1>| | QPE:> | Sum:|2
+  Prob: 0.04167 | Ampl: -0.2041+0.0000j | Dicke:0>| | S_1:0> | S_0:|1>| | QPE:> | Sum:|2
+  Prob: 0.04167 | Ampl: -0.2041+0.0000j | Dicke:0>| | S_1:1> | S_0:|0>| | QPE:> | Sum:|3
+  Prob: 0.04167 | Ampl: +0.2041+0.0000j | Dicke:0>| | S_1:1> | S_0:|0>| | QPE:> | Sum:|3
+  Prob: 0.04167 | Ampl: -0.2041+0.0000j | Dicke:0>| | S_1:1> | S_0:|0>| | QPE:> | Sum:|3
+  Prob: 0.04167 | Ampl: +0.2041+0.0000j | Dicke:0>| | S_1:1> | S_0:|0>| | QPE:> | Sum:|3
+  Prob: 0.04167 | Ampl: -0.2041+0.0000j | Dicke:0>| | S_1:1> | S_0:|0>| | QPE:> | Sum:|3
+  Prob: 0.04167 | Ampl: +0.2041+0.0000j | Dicke:0>| | S_1:1> | S_0:|0>| | QPE:> | Sum:|3
+  Prob: 0.04167 | Ampl: +0.2041+0.0000j | Dicke:0>| | S_1:1> | S_0:|0>| | QPE:> | Sum:|3
+  Prob: 0.04167 | Ampl: +0.2041+0.0000j | Dicke:0>| | S_1:1> | S_0:|0>| | QPE:> | Sum:|3
+  Prob: 0.04167 | Ampl: -0.2041+0.0000j | Dicke:1>| | S_1:0> | S_0:|0>| | QPE:> | Sum:|3
+  Prob: 0.04167 | Ampl: +0.2041+0.0000j | Dicke:1>| | S_1:0> | S_0:|0>| | QPE:> | Sum:|3
+  Prob: 0.04167 | Ampl: -0.2041+0.0000j | Dicke:1>| | S_1:0> | S_0:|0>| | QPE:> | Sum:|3
+  Prob: 0.04167 | Ampl: +0.2041+0.0000j | Dicke:1>| | S_1:0> | S_0:|0>| | QPE:> | Sum:|3
+  Prob: 0.04167 | Ampl: +0.2041+0.0000j | Dicke:1>| | S_1:0> | S_0:|0>| | QPE:> | Sum:|3
+  Prob: 0.04167 | Ampl: +0.2041+0.0000j | Dicke:1>| | S_1:0> | S_0:|0>| | QPE:> | Sum:|3
+  Prob: 0.04167 | Ampl: -0.2041+0.0000j | Dicke:1>| | S_1:0> | S_0:|0>| | QPE:> | Sum:|3
+  Prob: 0.04167 | Ampl: +0.2041+0.0000j | Dicke:1>| | S_1:0> | S_0:|0>| | QPE:> | Sum:|3
+  Total states: 24
+
+--- Checkpoint: [iter 1] [6] Post-Reset (alpha/wstate) ---
+  Prob: 0.04167 | Ampl: -0.2041+0.0000j | Dicke:0>| | S_1:0> | S_0:|1>| | QPE:> | Sum:|2
+  Prob: 0.04167 | Ampl: +0.2041+0.0000j | Dicke:0>| | S_1:0> | S_0:|1>| | QPE:> | Sum:|2
+  Prob: 0.02083 | Ampl: -0.1443+0.0000j | Dicke:0>| | S_1:0> | S_0:|1>| | QPE:> | Sum:|2
+  Prob: 0.02083 | Ampl: -0.1443+0.0000j | Dicke:0>| | S_1:0> | S_0:|1>| | QPE:> | Sum:|2
+  Prob: 0.02083 | Ampl: +0.1443+0.0000j | Dicke:0>| | S_1:0> | S_0:|1>| | QPE:> | Sum:|2
+  Prob: 0.02083 | Ampl: +0.1443+0.0000j | Dicke:0>| | S_1:0> | S_0:|1>| | QPE:> | Sum:|2
+  Prob: 0.04167 | Ampl: +0.2041+0.0000j | Dicke:0>| | S_1:0> | S_0:|1>| | QPE:> | Sum:|2
+  Prob: 0.04167 | Ampl: -0.2041+0.0000j | Dicke:0>| | S_1:0> | S_0:|1>| | QPE:> | Sum:|2
+  Prob: 0.02083 | Ampl: +0.1443+0.0000j | Dicke:0>| | S_1:0> | S_0:|1>| | QPE:> | Sum:|2
+  Prob: 0.02083 | Ampl: -0.1443+0.0000j | Dicke:0>| | S_1:0> | S_0:|1>| | QPE:> | Sum:|2
+  Prob: 0.02083 | Ampl: +0.1443+0.0000j | Dicke:0>| | S_1:0> | S_0:|1>| | QPE:> | Sum:|2
+  Prob: 0.02083 | Ampl: -0.1443+0.0000j | Dicke:0>| | S_1:0> | S_0:|1>| | QPE:> | Sum:|2
+  Prob: 0.04167 | Ampl: -0.2041+0.0000j | Dicke:0>| | S_1:1> | S_0:|0>| | QPE:> | Sum:|3
+  Prob: 0.04167 | Ampl: +0.2041+0.0000j | Dicke:0>| | S_1:1> | S_0:|0>| | QPE:> | Sum:|3
+  Prob: 0.04167 | Ampl: -0.2041+0.0000j | Dicke:0>| | S_1:1> | S_0:|0>| | QPE:> | Sum:|3
+  Prob: 0.04167 | Ampl: +0.2041+0.0000j | Dicke:0>| | S_1:1> | S_0:|0>| | QPE:> | Sum:|3
+  Prob: 0.02083 | Ampl: -0.1443+0.0000j | Dicke:0>| | S_1:1> | S_0:|0>| | QPE:> | Sum:|3
+  Prob: 0.02083 | Ampl: +0.1443+0.0000j | Dicke:0>| | S_1:1> | S_0:|0>| | QPE:> | Sum:|3
+  Prob: 0.02083 | Ampl: -0.1443+0.0000j | Dicke:0>| | S_1:1> | S_0:|0>| | QPE:> | Sum:|3
+  Prob: 0.02083 | Ampl: +0.1443+0.0000j | Dicke:0>| | S_1:1> | S_0:|0>| | QPE:> | Sum:|3
+  Prob: 0.02083 | Ampl: -0.1443+0.0000j | Dicke:0>| | S_1:1> | S_0:|0>| | QPE:> | Sum:|3
+  Prob: 0.02083 | Ampl: -0.1443+0.0000j | Dicke:0>| | S_1:1> | S_0:|0>| | QPE:> | Sum:|3
+  Prob: 0.02083 | Ampl: +0.1443+0.0000j | Dicke:0>| | S_1:1> | S_0:|0>| | QPE:> | Sum:|3
+  Prob: 0.02083 | Ampl: +0.1443+0.0000j | Dicke:0>| | S_1:1> | S_0:|0>| | QPE:> | Sum:|3
+  Prob: 0.04167 | Ampl: -0.2041+0.0000j | Dicke:1>| | S_1:0> | S_0:|0>| | QPE:> | Sum:|3
+  Prob: 0.04167 | Ampl: +0.2041+0.0000j | Dicke:1>| | S_1:0> | S_0:|0>| | QPE:> | Sum:|3
+  Prob: 0.02083 | Ampl: -0.1443+0.0000j | Dicke:1>| | S_1:0> | S_0:|0>| | QPE:> | Sum:|3
+  Prob: 0.02083 | Ampl: +0.1443+0.0000j | Dicke:1>| | S_1:0> | S_0:|0>| | QPE:> | Sum:|3
+  Prob: 0.02083 | Ampl: -0.1443+0.0000j | Dicke:1>| | S_1:0> | S_0:|0>| | QPE:> | Sum:|3
+  Prob: 0.02083 | Ampl: +0.1443+0.0000j | Dicke:1>| | S_1:0> | S_0:|0>| | QPE:> | Sum:|3
+  Prob: 0.02083 | Ampl: -0.1443+0.0000j | Dicke:1>| | S_1:0> | S_0:|0>| | QPE:> | Sum:|3
+  Prob: 0.02083 | Ampl: -0.1443+0.0000j | Dicke:1>| | S_1:0> | S_0:|0>| | QPE:> | Sum:|3
+  Prob: 0.02083 | Ampl: +0.1443+0.0000j | Dicke:1>| | S_1:0> | S_0:|0>| | QPE:> | Sum:|3
+  Prob: 0.02083 | Ampl: +0.1443+0.0000j | Dicke:1>| | S_1:0> | S_0:|0>| | QPE:> | Sum:|3
+  Prob: 0.04167 | Ampl: -0.2041+0.0000j | Dicke:1>| | S_1:0> | S_0:|0>| | QPE:> | Sum:|3
+  Prob: 0.04167 | Ampl: +0.2041+0.0000j | Dicke:1>| | S_1:0> | S_0:|0>| | QPE:> | Sum:|3
+  Total states: 36
+
+--- Checkpoint: [iter 1] [7] Post-QFT ---
+  Prob: 0.08333 | Ampl: -0.2887+0.0000j | Dicke:0>| | S_1:0> | S_0:|1>| | QPE:> | Sum:|2
+  Prob: 0.04167 | Ampl: -0.2041+0.0000j | Dicke:0>| | S_1:0> | S_0:|1>| | QPE:> | Sum:|2
+  Prob: 0.04167 | Ampl: +0.2041+0.0000j | Dicke:0>| | S_1:0> | S_0:|1>| | QPE:> | Sum:|2
+  Prob: 0.08333 | Ampl: +0.2887+0.0000j | Dicke:0>| | S_1:0> | S_0:|1>| | QPE:> | Sum:|2
+  Prob: 0.04167 | Ampl: +0.2041+0.0000j | Dicke:0>| | S_1:0> | S_0:|1>| | QPE:> | Sum:|2
+  Prob: 0.04167 | Ampl: +0.2041+0.0000j | Dicke:0>| | S_1:0> | S_0:|1>| | QPE:> | Sum:|2
+  Prob: 0.08333 | Ampl: -0.2887+0.0000j | Dicke:0>| | S_1:1> | S_0:|0>| | QPE:> | Sum:|3
+  Prob: 0.08333 | Ampl: -0.2887+0.0000j | Dicke:0>| | S_1:1> | S_0:|0>| | QPE:> | Sum:|3
+  Prob: 0.04167 | Ampl: -0.2041+0.0000j | Dicke:0>| | S_1:1> | S_0:|0>| | QPE:> | Sum:|3
+  Prob: 0.04167 | Ampl: -0.2041+0.0000j | Dicke:0>| | S_1:1> | S_0:|0>| | QPE:> | Sum:|3
+  Prob: 0.04167 | Ampl: -0.2041+0.0000j | Dicke:0>| | S_1:1> | S_0:|0>| | QPE:> | Sum:|3
+  Prob: 0.04167 | Ampl: +0.2041+0.0000j | Dicke:0>| | S_1:1> | S_0:|0>| | QPE:> | Sum:|3
+  Prob: 0.08333 | Ampl: -0.2887+0.0000j | Dicke:1>| | S_1:0> | S_0:|0>| | QPE:> | Sum:|3
+  Prob: 0.04167 | Ampl: -0.2041+0.0000j | Dicke:1>| | S_1:0> | S_0:|0>| | QPE:> | Sum:|3
+  Prob: 0.04167 | Ampl: -0.2041+0.0000j | Dicke:1>| | S_1:0> | S_0:|0>| | QPE:> | Sum:|3
+  Prob: 0.04167 | Ampl: -0.2041+0.0000j | Dicke:1>| | S_1:0> | S_0:|0>| | QPE:> | Sum:|3
+  Prob: 0.04167 | Ampl: +0.2041+0.0000j | Dicke:1>| | S_1:0> | S_0:|0>| | QPE:> | Sum:|3
+  Prob: 0.08333 | Ampl: -0.2887+0.0000j | Dicke:1>| | S_1:0> | S_0:|0>| | QPE:> | Sum:|3
+  Total states: 18
+
+--- Checkpoint: [iter 1] [8] Post-Diffusion ---
+  Prob: 0.08333 | Ampl: -0.2887+0.0000j | Dicke:0>| | S_1:0> | S_0:|1>| | QPE:> | Sum:|2
+  Prob: 0.04167 | Ampl: +0.2041+0.0000j | Dicke:0>| | S_1:0> | S_0:|1>| | QPE:> | Sum:|2
+  Prob: 0.04167 | Ampl: -0.2041+0.0000j | Dicke:0>| | S_1:0> | S_0:|1>| | QPE:> | Sum:|2
+  Prob: 0.08333 | Ampl: +0.2887+0.0000j | Dicke:0>| | S_1:0> | S_0:|1>| | QPE:> | Sum:|2
+  Prob: 0.04167 | Ampl: +0.2041+0.0000j | Dicke:0>| | S_1:0> | S_0:|1>| | QPE:> | Sum:|2
+  Prob: 0.04167 | Ampl: +0.2041+0.0000j | Dicke:0>| | S_1:0> | S_0:|1>| | QPE:> | Sum:|2
+  Prob: 0.08333 | Ampl: -0.2887+0.0000j | Dicke:0>| | S_1:1> | S_0:|0>| | QPE:> | Sum:|3
+  Prob: 0.08333 | Ampl: -0.2887+0.0000j | Dicke:0>| | S_1:1> | S_0:|0>| | QPE:> | Sum:|3
+  Prob: 0.04167 | Ampl: -0.2041+0.0000j | Dicke:0>| | S_1:1> | S_0:|0>| | QPE:> | Sum:|3
+  Prob: 0.04167 | Ampl: -0.2041+0.0000j | Dicke:0>| | S_1:1> | S_0:|0>| | QPE:> | Sum:|3
+  Prob: 0.04167 | Ampl: +0.2041+0.0000j | Dicke:0>| | S_1:1> | S_0:|0>| | QPE:> | Sum:|3
+  Prob: 0.04167 | Ampl: -0.2041+0.0000j | Dicke:0>| | S_1:1> | S_0:|0>| | QPE:> | Sum:|3
+  Prob: 0.08333 | Ampl: -0.2887+0.0000j | Dicke:1>| | S_1:0> | S_0:|0>| | QPE:> | Sum:|3
+  Prob: 0.04167 | Ampl: -0.2041+0.0000j | Dicke:1>| | S_1:0> | S_0:|0>| | QPE:> | Sum:|3
+  Prob: 0.04167 | Ampl: -0.2041+0.0000j | Dicke:1>| | S_1:0> | S_0:|0>| | QPE:> | Sum:|3
+  Prob: 0.04167 | Ampl: +0.2041+0.0000j | Dicke:1>| | S_1:0> | S_0:|0>| | QPE:> | Sum:|3
+  Prob: 0.04167 | Ampl: -0.2041+0.0000j | Dicke:1>| | S_1:0> | S_0:|0>| | QPE:> | Sum:|3
+  Prob: 0.08333 | Ampl: -0.2887+0.0000j | Dicke:1>| | S_1:0> | S_0:|0>| | QPE:> | Sum:|3
+  Total states: 18
+
+--- Checkpoint: [iter 1] [9] Post-Uncompute ---
+  Prob: 0.08333 | Ampl: -0.2887+0.0000j | Dicke:0>| | S_1:0> | S_0:|1>| | QPE:> | Sum:|2
+  Prob: 0.08333 | Ampl: +0.2887+0.0000j | Dicke:0>| | S_1:0> | S_0:|1>| | QPE:> | Sum:|2
+  Prob: 0.08333 | Ampl: +0.2887+0.0000j | Dicke:0>| | S_1:0> | S_0:|1>| | QPE:> | Sum:|2
+  Prob: 0.08333 | Ampl: +0.2887+0.0000j | Dicke:0>| | S_1:0> | S_0:|1>| | QPE:> | Sum:|2
+  Prob: 0.08333 | Ampl: -0.2887+0.0000j | Dicke:0>| | S_1:1> | S_0:|0>| | QPE:> | Sum:|3
+  Prob: 0.08333 | Ampl: +0.2887+0.0000j | Dicke:0>| | S_1:1> | S_0:|0>| | QPE:> | Sum:|3
+  Prob: 0.08333 | Ampl: -0.2887+0.0000j | Dicke:0>| | S_1:1> | S_0:|0>| | QPE:> | Sum:|3
+  Prob: 0.08333 | Ampl: -0.2887+0.0000j | Dicke:0>| | S_1:1> | S_0:|0>| | QPE:> | Sum:|3
+  Prob: 0.08333 | Ampl: -0.2887+0.0000j | Dicke:1>| | S_1:0> | S_0:|0>| | QPE:> | Sum:|3
+  Prob: 0.08333 | Ampl: +0.2887+0.0000j | Dicke:1>| | S_1:0> | S_0:|0>| | QPE:> | Sum:|3
+  Prob: 0.08333 | Ampl: -0.2887+0.0000j | Dicke:1>| | S_1:0> | S_0:|0>| | QPE:> | Sum:|3
+  Prob: 0.08333 | Ampl: -0.2887+0.0000j | Dicke:1>| | S_1:0> | S_0:|0>| | QPE:> | Sum:|3
+  Total states: 12
+
+--- Checkpoint: [iter 2] [3] Post-Oracle ---
+  Prob: 0.08333 | Ampl: -0.2887+0.0000j | Dicke:0>| | S_1:0> | S_0:|1>| | QPE:> | Sum:|2
+  Prob: 0.08333 | Ampl: +0.2887+0.0000j | Dicke:0>| | S_1:0> | S_0:|1>| | QPE:> | Sum:|2
+  Prob: 0.08333 | Ampl: +0.2887+0.0000j | Dicke:0>| | S_1:0> | S_0:|1>| | QPE:> | Sum:|2
+  Prob: 0.08333 | Ampl: +0.2887+0.0000j | Dicke:0>| | S_1:0> | S_0:|1>| | QPE:> | Sum:|2
+  Prob: 0.08333 | Ampl: -0.2887+0.0000j | Dicke:0>| | S_1:1> | S_0:|0>| | QPE:> | Sum:|3
+  Prob: 0.08333 | Ampl: +0.2887+0.0000j | Dicke:0>| | S_1:1> | S_0:|0>| | QPE:> | Sum:|3
+  Prob: 0.08333 | Ampl: +0.2887+0.0000j | Dicke:0>| | S_1:1> | S_0:|0>| | QPE:> | Sum:|3
+  Prob: 0.08333 | Ampl: +0.2887+0.0000j | Dicke:0>| | S_1:1> | S_0:|0>| | QPE:> | Sum:|3
+  Prob: 0.08333 | Ampl: -0.2887+0.0000j | Dicke:1>| | S_1:0> | S_0:|0>| | QPE:> | Sum:|3
+  Prob: 0.08333 | Ampl: +0.2887+0.0000j | Dicke:1>| | S_1:0> | S_0:|0>| | QPE:> | Sum:|3
+  Prob: 0.08333 | Ampl: +0.2887+0.0000j | Dicke:1>| | S_1:0> | S_0:|0>| | QPE:> | Sum:|3
+  Prob: 0.08333 | Ampl: +0.2887+0.0000j | Dicke:1>| | S_1:0> | S_0:|0>| | QPE:> | Sum:|3
+  Total states: 12
+
+--- Checkpoint: [iter 2] [4] Post-Ref A (qpe qubit 0) ---
+  Prob: 0.08333 | Ampl: -0.2887+0.0000j | Dicke:0>| | S_1:0> | S_0:|1>| | QPE:> | Sum:|2
+  Prob: 0.08333 | Ampl: +0.2887+0.0000j | Dicke:0>| | S_1:0> | S_0:|1>| | QPE:> | Sum:|2
+  Prob: 0.08333 | Ampl: +0.2887+0.0000j | Dicke:0>| | S_1:0> | S_0:|1>| | QPE:> | Sum:|2
+  Prob: 0.08333 | Ampl: -0.2887+0.0000j | Dicke:0>| | S_1:0> | S_0:|1>| | QPE:> | Sum:|2
+  Prob: 0.08333 | Ampl: -0.2887+0.0000j | Dicke:0>| | S_1:1> | S_0:|0>| | QPE:> | Sum:|3
+  Prob: 0.08333 | Ampl: +0.2887+0.0000j | Dicke:0>| | S_1:1> | S_0:|0>| | QPE:> | Sum:|3
+  Prob: 0.08333 | Ampl: +0.2887+0.0000j | Dicke:0>| | S_1:1> | S_0:|0>| | QPE:> | Sum:|3
+  Prob: 0.08333 | Ampl: -0.2887+0.0000j | Dicke:0>| | S_1:1> | S_0:|0>| | QPE:> | Sum:|3
+  Prob: 0.08333 | Ampl: -0.2887+0.0000j | Dicke:1>| | S_1:0> | S_0:|0>| | QPE:> | Sum:|3
+  Prob: 0.08333 | Ampl: +0.2887+0.0000j | Dicke:1>| | S_1:0> | S_0:|0>| | QPE:> | Sum:|3
+  Prob: 0.08333 | Ampl: +0.2887+0.0000j | Dicke:1>| | S_1:0> | S_0:|0>| | QPE:> | Sum:|3
+  Prob: 0.08333 | Ampl: -0.2887+0.0000j | Dicke:1>| | S_1:0> | S_0:|0>| | QPE:> | Sum:|3
+  Total states: 12
+
+--- Checkpoint: [iter 2] [5] Post-Ref B (qpe qubit 0) ---
+  Prob: 0.04167 | Ampl: -0.2041+0.0000j | Dicke:0>| | S_1:0> | S_0:|1>| | QPE:> | Sum:|2
+  Prob: 0.04167 | Ampl: +0.2041+0.0000j | Dicke:0>| | S_1:0> | S_0:|1>| | QPE:> | Sum:|2
+  Prob: 0.04167 | Ampl: -0.2041+0.0000j | Dicke:0>| | S_1:0> | S_0:|1>| | QPE:> | Sum:|2
+  Prob: 0.04167 | Ampl: -0.2041+0.0000j | Dicke:0>| | S_1:0> | S_0:|1>| | QPE:> | Sum:|2
+  Prob: 0.04167 | Ampl: +0.2041+0.0000j | Dicke:0>| | S_1:0> | S_0:|1>| | QPE:> | Sum:|2
+  Prob: 0.04167 | Ampl: -0.2041+0.0000j | Dicke:0>| | S_1:0> | S_0:|1>| | QPE:> | Sum:|2
+  Prob: 0.04167 | Ampl: +0.2041+0.0000j | Dicke:0>| | S_1:0> | S_0:|1>| | QPE:> | Sum:|2
+  Prob: 0.04167 | Ampl: -0.2041+0.0000j | Dicke:0>| | S_1:0> | S_0:|1>| | QPE:> | Sum:|2
+  Prob: 0.04167 | Ampl: -0.2041+0.0000j | Dicke:0>| | S_1:1> | S_0:|0>| | QPE:> | Sum:|3
+  Prob: 0.04167 | Ampl: +0.2041+0.0000j | Dicke:0>| | S_1:1> | S_0:|0>| | QPE:> | Sum:|3
+  Prob: 0.04167 | Ampl: +0.2041+0.0000j | Dicke:0>| | S_1:1> | S_0:|0>| | QPE:> | Sum:|3
+  Prob: 0.04167 | Ampl: -0.2041+0.0000j | Dicke:0>| | S_1:1> | S_0:|0>| | QPE:> | Sum:|3
+  Prob: 0.04167 | Ampl: +0.2041+0.0000j | Dicke:0>| | S_1:1> | S_0:|0>| | QPE:> | Sum:|3
+  Prob: 0.04167 | Ampl: -0.2041+0.0000j | Dicke:0>| | S_1:1> | S_0:|0>| | QPE:> | Sum:|3
+  Prob: 0.04167 | Ampl: -0.2041+0.0000j | Dicke:0>| | S_1:1> | S_0:|0>| | QPE:> | Sum:|3
+  Prob: 0.04167 | Ampl: -0.2041+0.0000j | Dicke:0>| | S_1:1> | S_0:|0>| | QPE:> | Sum:|3
+  Prob: 0.04167 | Ampl: -0.2041+0.0000j | Dicke:1>| | S_1:0> | S_0:|0>| | QPE:> | Sum:|3
+  Prob: 0.04167 | Ampl: +0.2041+0.0000j | Dicke:1>| | S_1:0> | S_0:|0>| | QPE:> | Sum:|3
+  Prob: 0.04167 | Ampl: +0.2041+0.0000j | Dicke:1>| | S_1:0> | S_0:|0>| | QPE:> | Sum:|3
+  Prob: 0.04167 | Ampl: -0.2041+0.0000j | Dicke:1>| | S_1:0> | S_0:|0>| | QPE:> | Sum:|3
+  Prob: 0.04167 | Ampl: -0.2041+0.0000j | Dicke:1>| | S_1:0> | S_0:|0>| | QPE:> | Sum:|3
+  Prob: 0.04167 | Ampl: -0.2041+0.0000j | Dicke:1>| | S_1:0> | S_0:|0>| | QPE:> | Sum:|3
+  Prob: 0.04167 | Ampl: +0.2041+0.0000j | Dicke:1>| | S_1:0> | S_0:|0>| | QPE:> | Sum:|3
+  Prob: 0.04167 | Ampl: -0.2041+0.0000j | Dicke:1>| | S_1:0> | S_0:|0>| | QPE:> | Sum:|3
+  Total states: 24
+
+--- Checkpoint: [iter 2] [6] Post-Reset (alpha/wstate) ---
+  Prob: 0.04167 | Ampl: -0.2041+0.0000j | Dicke:0>| | S_1:0> | S_0:|1>| | QPE:> | Sum:|2
+  Prob: 0.04167 | Ampl: +0.2041+0.0000j | Dicke:0>| | S_1:0> | S_0:|1>| | QPE:> | Sum:|2
+  Prob: 0.02083 | Ampl: +0.1443+0.0000j | Dicke:0>| | S_1:0> | S_0:|1>| | QPE:> | Sum:|2
+  Prob: 0.02083 | Ampl: +0.1443+0.0000j | Dicke:0>| | S_1:0> | S_0:|1>| | QPE:> | Sum:|2
+  Prob: 0.02083 | Ampl: -0.1443+0.0000j | Dicke:0>| | S_1:0> | S_0:|1>| | QPE:> | Sum:|2
+  Prob: 0.02083 | Ampl: -0.1443+0.0000j | Dicke:0>| | S_1:0> | S_0:|1>| | QPE:> | Sum:|2
+  Prob: 0.04167 | Ampl: +0.2041+0.0000j | Dicke:0>| | S_1:0> | S_0:|1>| | QPE:> | Sum:|2
+  Prob: 0.04167 | Ampl: -0.2041+0.0000j | Dicke:0>| | S_1:0> | S_0:|1>| | QPE:> | Sum:|2
+  Prob: 0.02083 | Ampl: +0.1443+0.0000j | Dicke:0>| | S_1:0> | S_0:|1>| | QPE:> | Sum:|2
+  Prob: 0.02083 | Ampl: -0.1443+0.0000j | Dicke:0>| | S_1:0> | S_0:|1>| | QPE:> | Sum:|2
+  Prob: 0.02083 | Ampl: +0.1443+0.0000j | Dicke:0>| | S_1:0> | S_0:|1>| | QPE:> | Sum:|2
+  Prob: 0.02083 | Ampl: -0.1443+0.0000j | Dicke:0>| | S_1:0> | S_0:|1>| | QPE:> | Sum:|2
+  Prob: 0.04167 | Ampl: -0.2041+0.0000j | Dicke:0>| | S_1:1> | S_0:|0>| | QPE:> | Sum:|3
+  Prob: 0.04167 | Ampl: +0.2041+0.0000j | Dicke:0>| | S_1:1> | S_0:|0>| | QPE:> | Sum:|3
+  Prob: 0.04167 | Ampl: +0.2041+0.0000j | Dicke:0>| | S_1:1> | S_0:|0>| | QPE:> | Sum:|3
+  Prob: 0.04167 | Ampl: -0.2041+0.0000j | Dicke:0>| | S_1:1> | S_0:|0>| | QPE:> | Sum:|3
+  Prob: 0.02083 | Ampl: +0.1443+0.0000j | Dicke:0>| | S_1:1> | S_0:|0>| | QPE:> | Sum:|3
+  Prob: 0.02083 | Ampl: -0.1443+0.0000j | Dicke:0>| | S_1:1> | S_0:|0>| | QPE:> | Sum:|3
+  Prob: 0.02083 | Ampl: +0.1443+0.0000j | Dicke:0>| | S_1:1> | S_0:|0>| | QPE:> | Sum:|3
+  Prob: 0.02083 | Ampl: -0.1443+0.0000j | Dicke:0>| | S_1:1> | S_0:|0>| | QPE:> | Sum:|3
+  Prob: 0.02083 | Ampl: +0.1443+0.0000j | Dicke:0>| | S_1:1> | S_0:|0>| | QPE:> | Sum:|3
+  Prob: 0.02083 | Ampl: +0.1443+0.0000j | Dicke:0>| | S_1:1> | S_0:|0>| | QPE:> | Sum:|3
+  Prob: 0.02083 | Ampl: -0.1443+0.0000j | Dicke:0>| | S_1:1> | S_0:|0>| | QPE:> | Sum:|3
+  Prob: 0.02083 | Ampl: -0.1443+0.0000j | Dicke:0>| | S_1:1> | S_0:|0>| | QPE:> | Sum:|3
+  Prob: 0.04167 | Ampl: -0.2041+0.0000j | Dicke:1>| | S_1:0> | S_0:|0>| | QPE:> | Sum:|3
+  Prob: 0.04167 | Ampl: +0.2041+0.0000j | Dicke:1>| | S_1:0> | S_0:|0>| | QPE:> | Sum:|3
+  Prob: 0.02083 | Ampl: +0.1443+0.0000j | Dicke:1>| | S_1:0> | S_0:|0>| | QPE:> | Sum:|3
+  Prob: 0.02083 | Ampl: -0.1443+0.0000j | Dicke:1>| | S_1:0> | S_0:|0>| | QPE:> | Sum:|3
+  Prob: 0.02083 | Ampl: +0.1443+0.0000j | Dicke:1>| | S_1:0> | S_0:|0>| | QPE:> | Sum:|3
+  Prob: 0.02083 | Ampl: -0.1443+0.0000j | Dicke:1>| | S_1:0> | S_0:|0>| | QPE:> | Sum:|3
+  Prob: 0.02083 | Ampl: +0.1443+0.0000j | Dicke:1>| | S_1:0> | S_0:|0>| | QPE:> | Sum:|3
+  Prob: 0.02083 | Ampl: +0.1443+0.0000j | Dicke:1>| | S_1:0> | S_0:|0>| | QPE:> | Sum:|3
+  Prob: 0.02083 | Ampl: -0.1443+0.0000j | Dicke:1>| | S_1:0> | S_0:|0>| | QPE:> | Sum:|3
+  Prob: 0.02083 | Ampl: -0.1443+0.0000j | Dicke:1>| | S_1:0> | S_0:|0>| | QPE:> | Sum:|3
+  Prob: 0.04167 | Ampl: +0.2041+0.0000j | Dicke:1>| | S_1:0> | S_0:|0>| | QPE:> | Sum:|3
+  Prob: 0.04167 | Ampl: -0.2041+0.0000j | Dicke:1>| | S_1:0> | S_0:|0>| | QPE:> | Sum:|3
+  Total states: 36
+
+--- Checkpoint: [iter 2] [7] Post-QFT ---
+  Prob: 0.08333 | Ampl: -0.2887+0.0000j | Dicke:0>| | S_1:0> | S_0:|1>| | QPE:> | Sum:|2
+  Prob: 0.04167 | Ampl: +0.2041+0.0000j | Dicke:0>| | S_1:0> | S_0:|1>| | QPE:> | Sum:|2
+  Prob: 0.04167 | Ampl: -0.2041+0.0000j | Dicke:0>| | S_1:0> | S_0:|1>| | QPE:> | Sum:|2
+  Prob: 0.08333 | Ampl: +0.2887+0.0000j | Dicke:0>| | S_1:0> | S_0:|1>| | QPE:> | Sum:|2
+  Prob: 0.04167 | Ampl: +0.2041+0.0000j | Dicke:0>| | S_1:0> | S_0:|1>| | QPE:> | Sum:|2
+  Prob: 0.04167 | Ampl: +0.2041+0.0000j | Dicke:0>| | S_1:0> | S_0:|1>| | QPE:> | Sum:|2
+  Prob: 0.08333 | Ampl: -0.2887+0.0000j | Dicke:0>| | S_1:1> | S_0:|0>| | QPE:> | Sum:|3
+  Prob: 0.08333 | Ampl: +0.2887+0.0000j | Dicke:0>| | S_1:1> | S_0:|0>| | QPE:> | Sum:|3
+  Prob: 0.04167 | Ampl: +0.2041+0.0000j | Dicke:0>| | S_1:1> | S_0:|0>| | QPE:> | Sum:|3
+  Prob: 0.04167 | Ampl: +0.2041+0.0000j | Dicke:0>| | S_1:1> | S_0:|0>| | QPE:> | Sum:|3
+  Prob: 0.04167 | Ampl: +0.2041+0.0000j | Dicke:0>| | S_1:1> | S_0:|0>| | QPE:> | Sum:|3
+  Prob: 0.04167 | Ampl: -0.2041+0.0000j | Dicke:0>| | S_1:1> | S_0:|0>| | QPE:> | Sum:|3
+  Prob: 0.08333 | Ampl: -0.2887+0.0000j | Dicke:1>| | S_1:0> | S_0:|0>| | QPE:> | Sum:|3
+  Prob: 0.04167 | Ampl: +0.2041+0.0000j | Dicke:1>| | S_1:0> | S_0:|0>| | QPE:> | Sum:|3
+  Prob: 0.04167 | Ampl: +0.2041+0.0000j | Dicke:1>| | S_1:0> | S_0:|0>| | QPE:> | Sum:|3
+  Prob: 0.04167 | Ampl: +0.2041+0.0000j | Dicke:1>| | S_1:0> | S_0:|0>| | QPE:> | Sum:|3
+  Prob: 0.04167 | Ampl: -0.2041+0.0000j | Dicke:1>| | S_1:0> | S_0:|0>| | QPE:> | Sum:|3
+  Prob: 0.08333 | Ampl: +0.2887+0.0000j | Dicke:1>| | S_1:0> | S_0:|0>| | QPE:> | Sum:|3
+  Total states: 18
+
+--- Checkpoint: [iter 2] [8] Post-Diffusion ---

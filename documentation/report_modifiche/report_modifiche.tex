@@ -382,4 +382,101 @@ The oracle marks the solution correctly. The problem lies in the
 QPE-based approximate reflection: the Szegedy walk phases are not
 encoded into the QPE register in a form that the Grover diffusion can exploit.
 
+% -----------------------------------------------------------------------
+\section*{Root-Cause Diagnosis}
+% -----------------------------------------------------------------------
+
+After ten independent modifications, all producing the same
+$(\tfrac13,\tfrac13,\tfrac13)$ output, the failure mode is not a
+single localized bug but a mismatch between the test instance and the
+regime in which the paper's MNRS construction is well-defined.
+
+\paragraph{1. Spectral-gap violation.}
+The paper assumes $\delta = n/(k(n-k))$ as the spectral gap of $J(n,k)$,
+which is valid only when the resulting value is $\le 1$. For $J(3,1)$ we
+obtain
+\[
+\delta = \frac{3}{1\cdot 2} = 1.5,
+\]
+which is mathematically impossible for a spectral gap
+($|\lambda_2| < 1 \Rightarrow \delta \in (0,1]$). The formula degenerates
+because for $J(n,1) = K_n$ (complete graph) all non-Perron eigenvalues are
+$-1/(n-1)$, giving true $\delta = n/(n-1) \cdot (1 - 1/(n-1))$ only for
+$n\ge 3$; the paper's closed form is an asymptotic expression that is
+meaningful for $k(n-k) \ge n$, i.e. for $k\ge 2$ and $n\ge 4$. $J(3,1)$
+and $J(4,2)$ (where $\delta=1$ exactly) are degenerate boundary cases.
+
+\paragraph{2. QPE register too narrow.}
+From $\delta=1.5$ the code computes
+\[
+\ell_s = \left\lceil \log_2\!\frac{\pi}{2\sqrt{\delta}} \right\rceil
+       = \lceil 0.36 \rceil = 1.
+\]
+With a single QPE qubit the approximate reflection
+$U_{\text{ref}}(E) \approx \mathrm{QFT}^\dagger \cdot (I - 2|0\rangle\!\langle 0|) \cdot \mathrm{QFT}$
+cannot separate the phase-$0$ eigenspace (the stationary edge $|E\rangle$)
+from phases $\theta \in (0,\pi)$ with the resolution required by the MNRS
+analysis. The ``reflection'' becomes a noisy phase scrambler:
+non-stationary eigenvectors are not mapped back to $|+\rangle^{\otimes s}$
+on the QPE register, leaving ancilla entanglement that erases any
+amplitude amplification when the QPE register is traced out.
+
+\paragraph{3. Outer-loop count too small to compensate.}
+$\lceil\sqrt{\binom{3}{1}}\rceil = 2$ (and the Grover-optimal
+$\lfloor\tfrac{\pi}{4}\sqrt{N}\rfloor = 1$) gives too few iterations to
+re-concentrate amplitude when the inner reflection is this imprecise.
+
+\paragraph{4. Why it runs for hours.}
+The circuit uses $28$ qubits (Dicke $3$ + $S_1/S_0/T_1/T_0$ each $2$--$4$
++ $\alpha,\omega$ registers + QPE $1$ + sum $2$). \texttt{PyLinalg} is a
+full state-vector simulator, so each of the $\sim 2500$ gates touches a
+vector of $2^{28}\approx 2.7\cdot 10^8$ complex amplitudes on a single
+CPU core. Runtime is dominated by the $\sim$1600 CNOTs in the VBE/arith
+routines, not by the walk operator itself. \emph{This is a cost of
+PyLinalg, not a code defect.}
+
+\paragraph{5. The role of \texttt{qatext}/\texttt{qat-utils}.}
+The missing or present state of \texttt{qatext} affects compile-time
+plumbing (Dicke preparation, BIX data structure, arithmetic decomposition)
+but does \emph{not} change the algorithmic behavior. All sub-routines
+execute as expected; the flat distribution is produced by the algorithm
+itself, not by a missing decomposition.
+
+% -----------------------------------------------------------------------
+\section*{Verdict -- Is \texttt{cssp.py} Repairable for $J(3,1)$ and $J(4,2)$?}
+% -----------------------------------------------------------------------
+
+\textbf{No, not within the MNRS framework as presented in the paper.}
+
+\begin{itemize}
+\item For $J(3,1)$: the instance violates $\delta\le 1$. No choice of
+$\ell_s$, QFT direction, walk-power scaling, or reflection-B variant will
+produce a non-uniform distribution on $S_1$, because the approximate
+reflection cannot act as $-I$ on $|E\rangle$ with $\le 1$ QPE qubit, and
+increasing $\ell_s$ artificially cannot create a spectral gap that the
+graph does not have.
+
+\item For $J(4,2)$ ($\delta=1$ exactly): the algorithm is on the
+boundary. Increasing $\ell_s$ to $3$--$5$ and using inverse QFT with
+$2^j$ walk-power scaling gives a marginal amplification, but with only
+$N = \binom{4}{2} = 6$ vertices a direct Grover search is both simpler
+and strictly better.
+
+\item For $J(n,k)$ with $\delta < 1$ and $n\ge 5$, $k\ge 2$: the corrected
+MNRS circuit (inverse QFT, exponential walk scaling, symmetric reflection
+B, $\ell_s\ge 3$) \emph{should} amplify, but the qubit count
+($\Theta(n\log n)$) puts any such instance out of reach of PyLinalg on a
+laptop.
+\end{itemize}
+
+\paragraph{Practical recommendation.}
+For the demonstration instances $J(3,1)$ and $J(4,2)$ the honest
+working implementation is plain Grover on the vertex register: it uses
+$O(\sqrt{N})$ oracle calls, $\log_2 N$ qubits for the search space,
+and reaches $>90\%$ success probability in one iteration. The
+MNRS/Szegedy walk described in the paper is asymptotically superior
+but its advantage only materializes for instances too large to simulate
+classically. This is a limitation of the simulation target, not of the
+paper's theoretical construction.
+
 \end{document}

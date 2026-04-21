@@ -9,3 +9,5 @@ Documentation/Quantum software experiments - A reporting and laboratory.pdf
 documentation/*.txt
 documentation/*.md
 Documentation/*.txt
+.claude/agents/quantum-walk-ssp-debugger.md
+/.claude
