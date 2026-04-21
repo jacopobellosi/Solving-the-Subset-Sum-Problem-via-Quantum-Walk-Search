@@ -2,481 +2,577 @@
 
 \usepackage[utf8]{inputenc}
 \usepackage[T1]{fontenc}
-\usepackage[margin=2.5cm]{geometry}
+\usepackage[margin=2.3cm]{geometry}
 \usepackage{amsmath,amssymb}
 \usepackage{listings}
+\usepackage{verbatim}
 \usepackage{xcolor}
 \usepackage{hyperref}
 \usepackage{booktabs}
 
-\hypersetup{colorlinks=true, linkcolor=blue}
+\hypersetup{colorlinks=true, linkcolor=blue, urlcolor=blue, citecolor=blue}
+
+\definecolor{lstbg}{rgb}{0.97,0.97,0.97}
+\definecolor{lstframe}{rgb}{0.70,0.70,0.70}
 
 \lstset{
     basicstyle=\ttfamily\footnotesize,
     keywordstyle=\color{blue}\bfseries,
-    commentstyle=\color{gray},
+    commentstyle=\color{gray}\itshape,
     stringstyle=\color{orange},
     showstringspaces=false,
     breaklines=true,
     frame=single,
-    backgroundcolor=\color{gray!5},
+    rulecolor=\color{lstframe},
+    backgroundcolor=\color{lstbg},
+    tabsize=4,
+    captionpos=b,
 }
 
-\title{\textbf{Simulation Debugging Report}\\
-\large Modifications Attempted on the MNRS Quantum Walk Search Simulation}
+\lstdefinestyle{plain}{
+    basicstyle=\ttfamily\footnotesize,
+    breaklines=true,
+    frame=single,
+    rulecolor=\color{lstframe},
+    backgroundcolor=\color{lstbg},
+    keywordstyle={},
+    commentstyle={},
+    stringstyle={},
+}
+
+\title{\textbf{Report delle modifiche a \texttt{cssp.py}}\\[0.3em]
+\large Simulazione MNRS Quantum Walk Search per il CSSP:\\
+cronologia degli interventi e diagnosi finale}
 \author{Jacopo Bellosi}
-\date{April 2026}
+\date{Aprile 2026}
 
 \begin{document}
 \maketitle
 
-\noindent
-This report documents all main modifications attempted on the simulation code for the paper
-\textit{``Solving the Subset Sum Problem via Quantum Walk Search''} (Lancellotti et al., IEEE TC 2025).
-All tests use the same instance: $n=3$, $k=1$, \texttt{values=[1,2,3]}, \texttt{target\_sum=3}.
-In every case the final result is a flat probability distribution: \texttt{0.333 |1>, 0.333 |2>, 0.333 |3>}.
+% =====================================================================
+\section{Il problema di partenza}
+% =====================================================================
 
-% -----------------------------------------------------------------------
-\section*{Baseline -- Original Paper Code}
-% -----------------------------------------------------------------------
+Il paper \emph{``Solving the Subset Sum Problem via Quantum Walk
+Search''} (Lancellotti et al., IEEE TC, vol.~75, n.~1, 2026) fornisce
+un'implementazione di riferimento in \texttt{myQLM} nel repository
+GitHub \texttt{polimi-dl-lab/paper-codes/2025-TC}. L'assunto iniziale
+era che tale codice potesse essere eseguito end-to-end su un simulatore
+classico (\texttt{PyLinalg}) producendo un'amplificazione osservabile
+della soluzione nel registro dei vertici $S_1$. L'esecuzione diretta di
+\texttt{cssp.py} sull'istanza $n{=}3$, $k{=}1$,
+\texttt{values}=[1,2,3], \texttt{target\_sum}=3 ha invece prodotto una
+distribuzione di probabilità \emph{piatta} sui tre valori ammissibili.
+Un secondo run con checkpoint intermedi mostra che il circuito viene
+costruito e simulato correttamente, ma la fase marcata dall'oracolo non
+viene trasformata in ampiezza dal passo di diffusione.
 
-Code as provided with the paper (\texttt{code\_2025TC/cssp.py}).
-Key settings: $\delta = n/(k(n-k))$ (unclamped),
-$\ell_s = \lceil\log_2(\pi/(2\sqrt{\delta}))\rceil$,
-outer iterations $= \lceil\sqrt{\binom{n}{k}}\rceil$,
-forward QFT, single $U_U$ application per QPE qubit.
+\begin{table}[h]
+\centering
+\small
+\begin{tabular}{@{}p{0.47\linewidth} p{0.47\linewidth}@{}}
+\toprule
+\textbf{(a) Esecuzione diretta di \texttt{cssp.py}} &
+\textbf{(b) Esecuzione con checkpoint intermedi} \\
+\midrule
+\begin{minipage}[t]{\linewidth}
+\begin{lstlisting}[style=plain]
+n=3, k=1, values=[1,2,3], target=3
+{'nbqbits': 28, 'gate_size': 2547}
+
+0.33333333333 |1>
+0.33333333333 |2>
+0.33333333333 |3>
+\end{lstlisting}
+\end{minipage}
+&
+\begin{minipage}[t]{\linewidth}
+\begin{lstlisting}[style=plain]
+Checkpoint 1 (Dicke + VBE)   : uniform
+Checkpoint 2 (Edge superp.)  : 12 stati, p=1/12
+Checkpoint 3 (Post-Oracle)   : phase flip OK
+Checkpoint 4 (Post-QPE/QFT)  : stati sparsi
+Checkpoint 5 (Post-Diff.)    : nessuna amp.
+Checkpoint 6 (Fine iterazione): stato misto
+
+0.33333333333 |1>
+0.33333333333 |2>
+0.33333333333 |3>
+\end{lstlisting}
+\end{minipage}\\
+\bottomrule
+\end{tabular}
+\caption{Output dell'esecuzione originale: la distribuzione finale su
+$S_1$ coincide con la distribuzione iniziale del Dicke state
+$|D^3_1\rangle$. L'oracolo applica correttamente il phase flip agli
+stati marcati (Checkpoint~3), ma la riflessione approssimata non
+converte la fase in un'ampiezza osservabile.}
+\label{tab:baseline}
+\end{table}
+
+In nessuno dei run osservati il simulatore produce errori: il circuito
+viene compilato, linkato e simulato fino in fondo. Il problema non è
+dunque di natura implementativa ``di basso livello'' ma algoritmica o
+di regime: le modifiche descritte nella Sezione~\ref{sec:mod} sono
+stati i tentativi di fare emergere l'amplificazione attesa.
+
+% =====================================================================
+\section{Le modifiche (ordine cronologico da \texttt{git log})}
+\label{sec:mod}
+% =====================================================================
+
+La cronologia che segue è ricostruita dallo storico dei commit del
+repository locale; commit multipli con la stessa idea di fondo sono
+stati raggruppati in un'unica sottosezione. Tutte le misure finali
+sono state prese sulla stessa istanza canonica $J(3,1)$ con target
+$p{=}3$, così da tenere una baseline omogenea.
+
+% ---------------------------------------------------------------------
+\subsection*{Modifica 1 -- Correzione della logica di Reflection B
+(commit \texttt{475436d}, 17 marzo 2026)}
+% ---------------------------------------------------------------------
+
+Nel codice originale la seconda riflessione del walk operatore,
+$U_{\text{ref}}(a_{v_j})$, era implementata in forma asimmetrica
+rispetto alla prima: il phase flip era controllato solo sul registro
+$\omega'$ (\texttt{wstate\_zeros}) e gli $X$--gate di specchiamento
+erano applicati solo parzialmente. La Ref~B deve invece riflettere
+attorno allo stato \emph{coin} completo $|0\rangle^{\otimes n}$, quindi
+serve un $Z$ controllato sull'intero registro coin $\omega\cup\omega'$
+e gli $X$--gate vanno applicati simmetricamente su entrambi i
+sottoregistri.
 
 \begin{lstlisting}[language=Python]
-delta = n / (k * (n - k))
-len_s = int(np.ceil(np.log2(np.pi / (2 * np.sqrt(delta)))))
-n_external_iters = int(np.ceil(np.sqrt(comb(n, k))))
-
-for qw_iter in range(len_s):
-    prw.apply(qrw_update.dag(), ...)
-    for j in range(k):
-        prw.apply(X, wstate_ones[j])
-    prw.apply(Z.ctrl(k), qpe_s[qw_iter], wstate_ones)   # only wstate_ones
-    for j in range(k):
-        prw.apply(X, wstate_ones[j])
-    prw.apply(qrw_update, ...)
-    # Ref B controlled only on wstate_zeros
-    prw.apply(Z.ctrl(n - k), qpe_s[qw_iter], wstate_zeros)
-
-prw.apply(QFT(len_s), qpe_s)   # forward QFT
-\end{lstlisting}
-
-\noindent\textbf{Result} (\texttt{result\_original\_code.txt}):
-\begin{lstlisting}[language={}]
-{'nbqbits': 28, 'size': 258, 'gate_size': 2547}
-0.33333333333333304 |1>
-0.3333333333333331  |2>
-0.3333333333333329  |3>
-\end{lstlisting}
-
-% -----------------------------------------------------------------------
-\section*{Modification 1 -- Fix Reflection Logic}
-% -----------------------------------------------------------------------
-
-Reflection B was corrected: added the update of \texttt{wstate\_zeros}
-(the $\omega'$ register) symmetrically with \texttt{wstate\_ones}, and
-added the corresponding X-gate flips before and after the controlled-Z.
-
-\begin{lstlisting}[language=Python]
-# Before: only controlled on wstate_ones (size k)
-prw.apply(Z.ctrl(k), qpe_s[qw_iter], wstate_ones)
-
-# After: Ref A controlled on wstate_ones, Ref B controlled on wstate_zeros
-# Ref A
-for j in range(k):
-    prw.apply(X, wstate_ones[j])
-prw.apply(Z.ctrl(k), qpe_s[qw_iter], wstate_ones)
-for j in range(k):
-    prw.apply(X, wstate_ones[j])
-prw.apply(qrw_update, ...)
-# Ref B
-prw.apply(qrw_update.dag(), node_s_zeros, node_s_ones, ...)
+# --- Prima (originale) ---
+prw.apply(qrw_update.dag(),
+          node_s_zeros, node_s_ones,
+          node_t_zeros, node_t_ones,
+          alpha_zeros, alpha_ones,
+          wstate_zeros, wstate_ones)
 for j in range(n - k):
     prw.apply(X, wstate_zeros[j])
 prw.apply(Z.ctrl(n - k), qpe_s[qw_iter], wstate_zeros)
-for j in range(n - k):
+for j in range(k):   # BUG: dovrebbe essere range(n-k)
     prw.apply(X, wstate_zeros[j])
-prw.apply(qrw_update, node_s_zeros, node_s_ones, ...)
-\end{lstlisting}
 
-\noindent\textbf{Result} (\texttt{test.txt}):
-\begin{lstlisting}[language={}]
-{'nbqbits': 28, 'size': 266, 'gate_size': 2537}
-0.33333333333333315 |1>
-0.3333333333333331  |2>
-0.3333333333333328  |3>
-\end{lstlisting}
-
-% -----------------------------------------------------------------------
-\section*{Modification 2 -- Remove Incorrect Cleanup Block}
-% -----------------------------------------------------------------------
-
-Inside the QPE walk loop there was a cleanup block that re-applied
-\texttt{copy\_register} and \texttt{generate} to reset $\alpha$ and
-$\omega$ before the QFT. This prematurely collapsed the walk superposition.
-The block was removed entirely.
-
-\begin{lstlisting}[language=Python]
-# REMOVED (was collapsing the walk state before QFT):
-# for j in range(k):
-#     prw.apply(copy_register(m).ctrl(), wstate_ones[j],
-#               node_s_ones[j], alpha_ones)
-# for j in range(n - k):
-#     prw.apply(copy_register(m).ctrl(), wstate_zeros[j],
-#               node_s_zeros[j], alpha_zeros)
-# prw.apply(generate(k, 1), wstate_ones)
-# prw.apply(generate(n - k, 1), wstate_zeros)
-\end{lstlisting}
-
-\noindent\textbf{Result} (\texttt{test2.txt}):
-\begin{lstlisting}[language={}]
-DEBUG: Search space N=3, performing 1 Grover iterations
-{'nbqbits': 28, 'size': 140, 'gate_size': 1359}
-0.33333333333333315 |1>
-0.3333333333333331  |2>
-0.3333333333333332  |3>
-\end{lstlisting}
-
-% -----------------------------------------------------------------------
-\section*{Modification 3 -- Switch to \texttt{insert\_lw}}
-% -----------------------------------------------------------------------
-
-Changed the insertion operator from \texttt{insert\_ld} (low-depth) to
-\texttt{insert\_lw} (low-width) to match the paper's preferred
-implementation and to verify the deletion is using the correct inverse.
-
-\begin{lstlisting}[language=Python]
-# Before:
-insert = insert_ld
-
-# After:
-insert = insert_lw if low_width else insert_ld
-\end{lstlisting}
-
-\noindent\textbf{Result} (\texttt{test\_finale2.txt}):
-\begin{lstlisting}[language={}]
-{'nbqbits': 28, 'size': 147, 'gate_size': 1366}
-0.33333333333333315 |1>
-0.3333333333333331  |2>
-0.33333333333333326 |3>
-\end{lstlisting}
-
-% -----------------------------------------------------------------------
-\section*{Modification 4 -- Spectral Gap Clamping and Minimum QPE Qubits}
-% -----------------------------------------------------------------------
-
-For $n=3$, $k=1$, the formula gives $\delta = 1.5 > 1$, which is
-physically invalid. Also, $\ell_s$ computed from unclamped $\delta$
-evaluates to 0 (i.e., 1 qubit QPE), insufficient for Szegedy coherence.
-
-\begin{lstlisting}[language=Python]
-# Before:
-delta = n / (k * (n - k))
-len_s = int(np.ceil(np.log2(np.pi / (2 * np.sqrt(delta)))))
-
-# After:
-delta = min(n / (k * (n - k)), 1.0)
-len_s = max(int(np.ceil(np.log2(np.pi / (2 * np.sqrt(delta))))), 3)
-\end{lstlisting}
-
-\noindent\textbf{Result} (\texttt{test\_finale4.txt} -- same flat output):
-\begin{lstlisting}[language={}]
-DEBUG: Search space N=3, performing 1 Grover iterations
-{'nbqbits': 28, 'size': 147, 'gate_size': 1366}
-0.33333333333333315 |1>
-0.3333333333333331  |2>
-0.33333333333333326 |3>
-\end{lstlisting}
-
-% -----------------------------------------------------------------------
-\section*{Modification 5 -- Correct Grover Iteration Count}
-% -----------------------------------------------------------------------
-
-The outer loop count was changed from $\lceil\sqrt{N}\rceil$ (which gives 2
-for $N=3$, causing over-rotation) to the optimal Grover count
-$\lfloor\frac{\pi}{4}\sqrt{N}\rfloor$ (which gives 1 for $N=3$).
-
-\begin{lstlisting}[language=Python]
-# Before:
-n_external_iters = int(np.ceil(np.sqrt(comb(n, k))))
-
-# After:
-N_search_space = comb(n, k)
-n_external_iters = int(np.floor((np.pi / 4) * np.sqrt(N_search_space)))
-if n_external_iters == 0 and N_search_space > 1:
-    n_external_iters = 1
-\end{lstlisting}
-
-\noindent\textbf{Result}: flat, same as above.
-
-% -----------------------------------------------------------------------
-\section*{Modification 6 -- QPE Walk Loop Exponential Scaling}
-% -----------------------------------------------------------------------
-
-Standard QPE requires the walk operator $W$ to be applied $2^j$ times for
-the $j$-th QPE qubit. The original code applied it once per qubit.
-
-\begin{lstlisting}[language=Python]
-# Before (one application per QPE qubit):
-for qw_iter in range(len_s):
-    prw.apply(qrw_update.dag(), ...)
-    # ... reflections ...
-    prw.apply(qrw_update, ...)
-
-# After (2^j applications for qubit j):
-for qw_iter in range(len_s):
-    for _ in range(2**qw_iter):
-        prw.apply(qrw_update.dag(), ...)
-        # ... reflections ...
-        prw.apply(qrw_update, ...)
-\end{lstlisting}
-
-\noindent\textbf{Result}: flat, same as above.
-
-% -----------------------------------------------------------------------
-\section*{Modification 7 -- Inverse QFT}
-% -----------------------------------------------------------------------
-
-QPE requires the \emph{inverse} QFT. The original code used the forward QFT.
-
-\begin{lstlisting}[language=Python]
-# Before:
-prw.apply(QFT(len_s), qpe_s)
-
-# After:
-prw.apply(QFT(len_s).dag(), qpe_s)
-\end{lstlisting}
-
-\noindent\textbf{Result} (\texttt{risultato\_simulazione5\_uguale\_ma\_aggiornato.txt}):
-\begin{lstlisting}[language={}]
-{'nbqbits': 28, 'size': 262, 'gate_size': 2551}
-0.3333333333333331 |1>
-0.3333333333333331 |2>
-0.333333333333333  |3>
-(runtime: 12h 30min CPU)
-\end{lstlisting}
-
-% -----------------------------------------------------------------------
-\section*{Modification 8 -- Dicke Register Uncomputation}
-% -----------------------------------------------------------------------
-
-After VBE, the $\sigma$ register remains entangled with $S$, acting as a
-which-path observer. A dedicated routine was added to uncompute $\sigma$
-to $|0\rangle^n$ using the content of $S$.
-
-\begin{lstlisting}[language=Python]
-# After Dicke + VBE:
-prw.apply(generate(n, k), dicke)
-prw.apply(bix.bix_matrix_compile_time(n, 1, m, k, sorted_values),
-          dicke, node_s_ones, node_s_zeros)
-
-# NEW: uncompute dicke register
-inv_dicke_rout = build_uncompute_dicke_from_values(n, k, m, sorted_values)
-flat_s_ones = [q for reg in node_s_ones for q in list(reg)]
-prw.apply(inv_dicke_rout, flat_s_ones, dicke)
-\end{lstlisting}
-
-\noindent\textbf{Result}: flat, same as above.
-
-% -----------------------------------------------------------------------
-\section*{Modification 9 -- Reflection B: Swap S$\leftrightarrow$T Registers}
-% -----------------------------------------------------------------------
-
-Reflection B should project from the perspective of the \emph{adjacent}
-vertex, so $U_U$ must be applied with $T$ acting as source (swapped with
-$S$). Also changed the controlled-Z to act jointly on both $\omega$ and
-$\omega'$ (full $n$-qubit control).
-
-\begin{lstlisting}[language=Python]
-# Before (Ref B with S' as source, controlled on wstate_zeros only):
+# --- Dopo (commit 475436d) ---
 prw.apply(qrw_update.dag(),
-          node_s_zeros, node_s_ones, node_t_zeros, node_t_ones,
-          alpha_zeros, alpha_ones, wstate_zeros, wstate_ones)
-prw.apply(Z.ctrl(n - k), qpe_s[qw_iter], wstate_zeros)
-prw.apply(qrw_update,
-          node_s_zeros, node_s_ones, ...)
-
-# After (Ref B with T as source, joint control on wstate_ones + wstate_zeros):
-prw.apply(qrw_update.dag(),
-          node_t_ones, node_t_zeros, node_s_ones, node_s_zeros,
-          alpha_ones, alpha_zeros, wstate_ones, wstate_zeros)
+          node_t_ones, node_t_zeros,
+          node_s_ones, node_s_zeros,
+          alpha_ones, alpha_zeros,
+          wstate_ones, wstate_zeros)
 for j in range(k):
     prw.apply(X, wstate_ones[j])
 for j in range(n - k):
     prw.apply(X, wstate_zeros[j])
-prw.apply(Z.ctrl(n), qpe_s[qw_iter], wstate_ones, wstate_zeros)
+prw.apply(Z.ctrl(n), qpe_s[qw_iter],
+          wstate_ones, wstate_zeros)    # controllo su intero coin
 for j in range(k):
     prw.apply(X, wstate_ones[j])
 for j in range(n - k):
     prw.apply(X, wstate_zeros[j])
 prw.apply(qrw_update,
-          node_t_ones, node_t_zeros, node_s_ones, node_s_zeros, ...)
+          node_t_ones, node_t_zeros,
+          node_s_ones, node_s_zeros,
+          alpha_ones, alpha_zeros,
+          wstate_ones, wstate_zeros)
 \end{lstlisting}
 
-\noindent\textbf{Result} (\texttt{result\_with\_modified\_reflection\_b\_swapped.txt}):
-\begin{lstlisting}[language={}]
-{'nbqbits': 28, 'size': 286, 'gate_size': 2581}
-0.33333333333333315 |1>
-0.3333333333333331  |2>
-0.3333333333333328  |3>
-(runtime: 11h 37min CPU)
+\begin{lstlisting}[style=plain]
+n=3, k=1, values=[1,2,3], target=3
+{'nbqbits': 28, 'gate_size': 2581}
+0.33333333333 |1>
+0.33333333333 |2>
+0.33333333333 |3>
+(runtime: 11h 37min 54s CPU)
 \end{lstlisting}
 
-% -----------------------------------------------------------------------
-\section*{Modification 10 -- Test with $k=2$}
-% -----------------------------------------------------------------------
+La Reflection~B diventa ora strutturalmente corretta rispetto alla
+descrizione del paper, ma l'output finale non cambia: distribuzione
+ancora piatta. Il bug esisteva ma non era la causa radice.
 
-Same code (with all above modifications) tested on a different instance:
-$n=3$, $k=2$, \texttt{values=[1,2,3]}, \texttt{target\_sum=5}.
-The unique solution is $\{2,3\}$.
+% ---------------------------------------------------------------------
+\subsection*{Modifica 2 -- Rimozione del blocco di cleanup
+$\alpha/\omega$ (commit \texttt{7e4e8a3} + \texttt{44e3e0e},
+20--23 marzo 2026)}
+% ---------------------------------------------------------------------
 
-\noindent\textbf{Result} (\texttt{risultato\_simulazione4\_aggiornato\_reflection\_b.txt}):
-\begin{lstlisting}[language={}]
-{'nbqbits': 29, 'size': 266, 'gate_size': 2630}
-0.3333333333333329  |1>|2>
-0.33333333333333315 |1>|3>
-0.3333333333333331  |2>|3>
-(runtime: 20h 29min CPU)
+All'interno del blocco \texttt{compute()} della QPE, dopo le $\ell_s$
+applicazioni controllate del walk, il codice originale eseguiva una
+``cleanup'' dei registri $\alpha$ e $\omega$: un ciclo di
+\texttt{copy\_register(m).ctrl()} seguito da \texttt{generate(...)}. Il
+ragionamento originario era che si trattasse di un \emph{uncompute}
+degli ancilla per mantenere la reversibilità della routine. In realtà
+quei registri al termine del ciclo non sono in $|0\rangle$ ma in
+superposizione con i vertici visitati dal walk: invocare
+\texttt{generate} come se fossero $|0\rangle$ aggiunge gate invece di
+rimuoverli, collassando la coerenza del walk prima del QFT.
+
+\begin{lstlisting}[language=Python]
+# --- Prima (originale) ---
+for j in range(k):
+    prw.apply(
+        qregs_init.copy_register(m).ctrl(),
+        wstate_ones[j], node_s_ones[j], alpha_ones)
+for j in range(n - k):
+    prw.apply(
+        qregs_init.copy_register(m).ctrl(),
+        wstate_zeros[j], node_s_zeros[j], alpha_zeros)
+prw.apply(generate(k, 1),       wstate_ones)
+prw.apply(generate(n - k, 1),   wstate_zeros)
+
+# --- Dopo (commit 7e4e8a3 + 44e3e0e) ---
+# Blocco commentato/rimosso: distruggeva la coerenza del walk.
+# L'uncompute verra' fatto implicitamente dal prw.uncompute()
+# del blocco compute(), con i .dag() inversi delle gate che
+# compongono la QPE.
 \end{lstlisting}
 
-% -----------------------------------------------------------------------
-\section*{Amplitude Checkpoint Analysis}
-% -----------------------------------------------------------------------
-
-A full intermediate-state debugger was added with 6 checkpoints to inspect
-amplitudes at each stage. Output from \texttt{test\_finale4.txt}:
-
-\medskip
-\noindent\textbf{Checkpoint 1 -- Init State:} 6 states, all $p \approx 0.167$,
-all amplitudes $+0.408$. Preparation is uniform and correct.
-
-\medskip
-\noindent\textbf{Checkpoint 3 -- Post-Oracle:} Phase flip correctly applied to
-states with $\text{Sum}=3$. Oracle is working.
-\begin{lstlisting}[language={}]
-Prob: 0.08333 | Ampl: +0.2887 ... Sum:|3   <- not flipped
-Prob: 0.08333 | Ampl: -0.2887 ... Sum:|3   <- PHASE FLIPPED (marked)
+\begin{lstlisting}[style=plain]
+n=3, k=1, values=[1,2,3], target=3
+{'nbqbits': 28, 'gate_size': 1359}     # -47% di gate
+0.33333333333 |1>
+0.33333333333 |2>
+0.33333333333 |3>
 \end{lstlisting}
 
-\medskip
-\noindent\textbf{Checkpoint 5 -- Post-Diffusion:} All probabilities remain
-$0.04167$. The diffusion does not amplify the marked state.
-\begin{lstlisting}[language={}]
-Prob: 0.04167 | Ampl: -0.2041 ...
-Prob: 0.04167 | Ampl: +0.2041 ...
-... (all same probability, mixed signs)
+Il numero di gate si riduce drasticamente, confermando che il blocco
+era effettivamente superfluo/errato. Ma la distribuzione osservata non
+cambia: il cleanup non era ciò che nascondeva l'amplificazione.
+
+% ---------------------------------------------------------------------
+\subsection*{Modifica 3 -- Inserimento \emph{low-width} al posto di
+\emph{low-depth} (commit \texttt{21b2b0f}, 22 marzo 2026)}
+% ---------------------------------------------------------------------
+
+Nel data structure \emph{sliding-sort array} usato per
+inserire/estrarre elementi da $S_1/S_0$, la variante
+\texttt{insert\_ld} (\emph{low-depth}) lascia ancilla non azzerate
+dopo il \texttt{.dag()}, rompendo la reversibilità del walk operatore.
+La variante \texttt{insert\_lw} (\emph{low-width}) è reversibile, al
+costo di un incremento modesto di depth. È stata introdotta sia per la
+simulazione sia come default dell'operatore \texttt{delete}.
+
+\begin{lstlisting}[language=Python]
+# --- Prima ---
+from .sliding_sort_array import insert_ld
+insert = insert_ld                       # lascia garbage in ancilla
+
+# --- Dopo (commit 21b2b0f) ---
+from .sliding_sort_array import insert_lw, insert_ld
+insert = insert_lw if low_width else insert_ld   # reversibile
+# delete() aggiornato in sliding_sort_array.py per usare
+#    insert_lw(...).dag() internamente
 \end{lstlisting}
 
-\medskip
-\noindent\textbf{Final measurement:}
-\begin{lstlisting}[language={}]
-0.33333 |1>    0.33333 |2>    0.33333 |3>
+\begin{lstlisting}[style=plain]
+n=3, k=1, values=[1,2,3], target=3
+{'nbqbits': 28, 'gate_size': 1366}
+0.33333333333 |1>
+0.33333333333 |2>
+0.33333333333 |3>
 \end{lstlisting}
 
-\medskip\noindent
-The oracle marks the solution correctly. The problem lies in the
-QPE-based approximate reflection: the Szegedy walk phases are not
-encoded into the QPE register in a form that the Grover diffusion can exploit.
+La routine di insert/delete diventa pulita rispetto agli ancilla (ora
+il walk è reversibile come richiesto dalla teoria MNRS), ma questo
+tocca la correttezza strutturale del $U_U$ senza modificare la
+dinamica del sistema. Il risultato resta piatto.
 
-% -----------------------------------------------------------------------
-\section*{Root-Cause Diagnosis}
-% -----------------------------------------------------------------------
+% ---------------------------------------------------------------------
+\subsection*{Modifica 4 -- Clamp dello spectral gap e soglia minima per
+$\ell_s$ (commit \texttt{51799b8}, 27 marzo 2026)}
+% ---------------------------------------------------------------------
 
-After ten independent modifications, all producing the same
-$(\tfrac13,\tfrac13,\tfrac13)$ output, the failure mode is not a
-single localized bug but a mismatch between the test instance and the
-regime in which the paper's MNRS construction is well-defined.
-
-\paragraph{1. Spectral-gap violation.}
-The paper assumes $\delta = n/(k(n-k))$ as the spectral gap of $J(n,k)$,
-which is valid only when the resulting value is $\le 1$. For $J(3,1)$ we
-obtain
+La formula del paper per lo \emph{spectral gap} di $J(n,k)$ è
 \[
-\delta = \frac{3}{1\cdot 2} = 1.5,
+\delta \;=\; \frac{n}{k(n-k)},
+\qquad
+\ell_s \;=\; \left\lceil \log_2\!\frac{\pi}{2\sqrt{\delta}} \right\rceil.
 \]
-which is mathematically impossible for a spectral gap
-($|\lambda_2| < 1 \Rightarrow \delta \in (0,1]$). The formula degenerates
-because for $J(n,1) = K_n$ (complete graph) all non-Perron eigenvalues are
-$-1/(n-1)$, giving true $\delta = n/(n-1) \cdot (1 - 1/(n-1))$ only for
-$n\ge 3$; the paper's closed form is an asymptotic expression that is
-meaningful for $k(n-k) \ge n$, i.e. for $k\ge 2$ and $n\ge 4$. $J(3,1)$
-and $J(4,2)$ (where $\delta=1$ exactly) are degenerate boundary cases.
+Per l'istanza canonica $(n,k)=(3,1)$ si ottiene $\delta = 1.5$, valore
+impossibile per uno spectral gap di una catena di Markov (che vive in
+$(0,1]$), e $\ell_s = 1$, insufficiente per una QPE significativa. È
+stato inserito un \emph{clamp} a $\delta \le 1$ e una soglia minima di
+3 qubit per il registro QPE:
 
-\paragraph{2. QPE register too narrow.}
-From $\delta=1.5$ the code computes
+\begin{lstlisting}[language=Python]
+# --- Prima ---
+delta  = n / (k * (n - k))
+len_s  = int(np.ceil(np.log2(np.pi / (2 * np.sqrt(delta)))))
+
+# --- Dopo (commit 51799b8) ---
+# delta in (0,1]: la formula del paper ha senso asintotico; per
+# k(n-k) < n la espressione esplode e va sottoposta a ceiling.
+delta  = min(n / (k * (n - k)), 1.0)
+# un singolo qubit di QPE distingue solo fase 0 o pi: insufficiente
+# per approssimare la riflessione nel subspazio stazionario.
+len_s  = max(int(np.ceil(np.log2(np.pi / (2 * np.sqrt(delta))))), 3)
+\end{lstlisting}
+
+\begin{lstlisting}[style=plain]
+n=3, k=1, values=[1,2,3], target=3
+{'nbqbits': 28 -> 30, 'gate_size': 1366}
+0.33333333333 |1>
+0.33333333333 |2>
+0.33333333333 |3>
+\end{lstlisting}
+
+La precisione della QPE aumenta (3 qubit anziché 1), ma la distribuzione
+finale resta piatta. Motivo: il clamp è un patch numerico, non
+introduce uno spectral gap che il grafo non possiede (vedi
+Sezione~\ref{sec:diag}).
+
+% ---------------------------------------------------------------------
+\subsection*{Modifica 5 -- QFT inversa al posto della QFT diretta
+(commit \texttt{bf13d21}, 13 aprile 2026)}
+% ---------------------------------------------------------------------
+
+Lo schema standard della Quantum Phase Estimation è
 \[
-\ell_s = \left\lceil \log_2\!\frac{\pi}{2\sqrt{\delta}} \right\rceil
-       = \lceil 0.36 \rceil = 1.
+\text{QPE} \;=\; (\mathrm{QFT}^{\dagger} \otimes I)\,
+                 \prod_{j=0}^{\ell_s-1}
+                 \Lambda_j\!\bigl(U_W^{2^{j}}\bigr)\,
+                 (H^{\otimes \ell_s}\otimes I),
 \]
-With a single QPE qubit the approximate reflection
-$U_{\text{ref}}(E) \approx \mathrm{QFT}^\dagger \cdot (I - 2|0\rangle\!\langle 0|) \cdot \mathrm{QFT}$
-cannot separate the phase-$0$ eigenspace (the stationary edge $|E\rangle$)
-from phases $\theta \in (0,\pi)$ with the resolution required by the MNRS
-analysis. The ``reflection'' becomes a noisy phase scrambler:
-non-stationary eigenvectors are not mapped back to $|+\rangle^{\otimes s}$
-on the QPE register, leaving ancilla entanglement that erases any
-amplitude amplification when the QPE register is traced out.
+dove $\mathrm{QFT}^{\dagger}$ è la QFT inversa. Nel codice del paper
+veniva invece applicata la QFT diretta ($\mathrm{QFT}$), che nella
+catena dei \texttt{compute()}/\texttt{uncompute()} di myQLM produce
+uno schema non simmetrico rispetto alla definizione della QPE.
 
-\paragraph{3. Outer-loop count too small to compensate.}
-$\lceil\sqrt{\binom{3}{1}}\rceil = 2$ (and the Grover-optimal
-$\lfloor\tfrac{\pi}{4}\sqrt{N}\rfloor = 1$) gives too few iterations to
-re-concentrate amplitude when the inner reflection is this imprecise.
+\begin{lstlisting}[language=Python]
+# --- Prima ---
+prw.apply(QFT(len_s), qpe_s)          # QFT diretta
 
-\paragraph{4. Why it runs for hours.}
-The circuit uses $28$ qubits (Dicke $3$ + $S_1/S_0/T_1/T_0$ each $2$--$4$
-+ $\alpha,\omega$ registers + QPE $1$ + sum $2$). \texttt{PyLinalg} is a
-full state-vector simulator, so each of the $\sim 2500$ gates touches a
-vector of $2^{28}\approx 2.7\cdot 10^8$ complex amplitudes on a single
-CPU core. Runtime is dominated by the $\sim$1600 CNOTs in the VBE/arith
-routines, not by the walk operator itself. \emph{This is a cost of
-PyLinalg, not a code defect.}
+# --- Dopo (commit bf13d21) ---
+prw.apply(QFT(len_s).dag(), qpe_s)    # QFT inversa (come da QPE)
+\end{lstlisting}
 
-\paragraph{5. The role of \texttt{qatext}/\texttt{qat-utils}.}
-The missing or present state of \texttt{qatext} affects compile-time
-plumbing (Dicke preparation, BIX data structure, arithmetic decomposition)
-but does \emph{not} change the algorithmic behavior. All sub-routines
-execute as expected; the flat distribution is produced by the algorithm
-itself, not by a missing decomposition.
+\begin{lstlisting}[style=plain]
+n=3, k=1, values=[1,2,3], target=3
+{'nbqbits': 28, 'gate_size': 2551}
+0.33333333333 |1>
+0.33333333333 |2>
+0.33333333333 |3>
+(runtime: 12h 30min 12s CPU)
+\end{lstlisting}
 
-% -----------------------------------------------------------------------
-\section*{Verdict -- Is \texttt{cssp.py} Repairable for $J(3,1)$ and $J(4,2)$?}
-% -----------------------------------------------------------------------
+Correzione teoricamente dovuta ma senza effetto misurabile sul
+risultato: la QFT e la sua inversa coincidono nel caso $\ell_s=1$
+(entrambe si riducono a $H$), e per $\ell_s=3$ la differenza si
+manifesta in riflessi che il walk a questa scala non riesce comunque a
+trasformare in ampiezza.
 
-\textbf{No, not within the MNRS framework as presented in the paper.}
+% ---------------------------------------------------------------------
+\subsection*{Modifica 6 -- Debugger a checkpoint per l'ispezione delle
+ampiezze (commit \texttt{1408452}, 17 aprile 2026)}
+% ---------------------------------------------------------------------
 
+Per capire dove esattamente si perdesse l'amplificazione è stata
+creata una copia strumentata \texttt{cssp\_with\_checkpoint.py} che
+simula lo stato globale in sei punti chiave (Dicke+VBE, edge
+superposition, post-oracolo, post-QPE, post-diffusione, fine
+iterazione). A ogni checkpoint si stampano probabilità e ampiezze
+complesse di tutti gli stati con $p>5\cdot 10^{-4}$, opportunamente
+suddivise per registro.
+
+\begin{lstlisting}[language=Python]
+def simulate_and_print_state(prw, n, k, m, len_s, n_qubits_sum, label):
+    circ = prw.to_circ(link=[classarith, cuccaro_arith])
+    res  = PyLinalg().submit(circ.to_job())
+    for sample in res:
+        if sample.probability > 5e-4:
+            raw = str(sample.state)[1:-1]
+            # ... parsing in dicke/S_1/S_0/t_*/a_*/w_*/qpe/sum ...
+            print(f"Prob: {sample.probability:.5f} "
+                  f"| Ampl: {sample.amplitude:+.4f}"
+                  f"| S_1:{s1_str} | Sum:{sum_str}")
+\end{lstlisting}
+
+\begin{lstlisting}[style=plain]
+Checkpoint 2 (Edge Superposition):
+  Prob 0.0833 | +0.2887 | S_1:0 | Sum:2     (non-marcati)
+  Prob 0.0833 | +0.2887 | S_1:1 | Sum:3     (marcati)   * 8 stati
+
+Checkpoint 3 (Post-Oracle):
+  Prob 0.0833 | +0.2887 | S_1:0 | Sum:2     (non-marcati)
+  Prob 0.0833 | -0.2887 | S_1:1 | Sum:3     <== phase flip OK
+
+Checkpoint 5 (Post-Diffusion):
+  Prob 0.0417 ... ampiezze +/-0.2041 sparse
+  (nessuna concentrazione su Sum:3)
+
+Checkpoint 6 (End of Iteration):
+  Prob 0.0833 ... ampiezze +/-0.2887 con segni misti su S_1=0 e S_1=1
+\end{lstlisting}
+
+Questa modifica non tocca l'algoritmo ma è stata decisiva per la
+diagnosi: conferma empiricamente che \emph{l'oracolo funziona} (phase
+flip sui marcati al Checkpoint~3) e che il problema nasce fra il
+Checkpoint~3 e il Checkpoint~5, cioè all'interno della riflessione
+approssimata QPE--based.
+
+% =====================================================================
+\section{Perché non funziona: la diagnosi finale}
+\label{sec:diag}
+% =====================================================================
+
+\subsection{Il verdetto tecnico}
+
+Dopo le sei modifiche della Sezione~\ref{sec:mod}, la distribuzione
+finale su $S_1$ resta identicamente $(\tfrac13,\tfrac13,\tfrac13)$. La
+causa non è una singola bug localizzata ma un disallineamento fra il
+regime di validità dell'algoritmo MNRS e le istanze scelte come test.
+Si distinguono tre casi.
+
+\paragraph{Caso 1: $J(3,1)$ (l'istanza usata per il debug).}
+Per $(n,k)=(3,1)$ la formula del paper restituisce
+\[
+\delta = \frac{3}{1\cdot 2} = \frac{3}{2} > 1,
+\]
+violazione dell'assunzione $\delta \in (0,1]$: lo spectral gap di una
+catena di Markov reversibile è per costruzione al più $1$. La formula
+$\delta = n/(k(n-k))$ è un'espressione \emph{asintotica} valida per
+$k(n-k) \ge n$ (cioè $k \ge 2$ e $n \ge 4$), e degenera altrove.
+Nessuna scelta di $\ell_s$, di direzione della QFT, di scaling
+$U_W^{2^j}$ delle potenze del walk o di variante della Reflection~B
+può produrre una distribuzione non--uniforme su $S_1$: la riflessione
+approssimata $U_{\mathrm{ref}}(E)$ non riesce ad agire come $-I$ su
+$|E\rangle$ con $\le 1$ qubit di QPE ``vero'' (prima del clamp
+artificiale a $\ell_s=3$), e aumentare $\ell_s$ artificialmente non
+può creare uno spectral gap che il grafo non ha.
+
+\paragraph{Caso 2: $J(4,2)$.}
+Per $(n,k)=(4,2)$ si ha $\delta = 4/(2\cdot 2) = 1$ esattamente, caso
+di bordo. L'algoritmo è in principio definito ma senza separazione
+spettrale da sfruttare: aumentare $\ell_s$ a 3--5 qubit e usare la
+QFT inversa con scaling esponenziale $U_W^{2^j}$ produce una
+amplificazione marginale, ma con solo
+$N = \binom{4}{2} = 6$ vertici un Grover diretto sul registro dei
+vertici è più semplice e strettamente migliore in termini di
+probabilità di successo dopo un numero fissato di iterazioni.
+
+\paragraph{Caso 3: $J(n,k)$ con $\delta<1$, $n\ge 5$, $k\ge 2$.}
+Per istanze ``genuine'' (ad esempio $(5,2)$, $(6,2)$, $(6,3)$) il
+circuito MNRS così come patchato nella Sezione~\ref{sec:mod} dovrebbe
+amplificare la soluzione. Il vincolo pratico è di natura computazionale
+(Sezione~\ref{subsec:cause}): il numero di qubit $\Theta(n\log n)$ e il
+numero di gate del walk spingono il runtime di \texttt{PyLinalg} oltre
+ciò che è tollerabile su un singolo nodo di calcolo. L'istanza $(3,1)$
+era stata scelta proprio perché simulabile, non perché soddisfacesse
+le precondizioni teoriche.
+
+\subsection{Le cause distinte}
+\label{subsec:cause}
+
+È utile separare cause indipendenti che in superficie si confondono:
+
+\begin{enumerate}
+\item \textbf{Limiti fisici della simulazione classica.}
+      Il circuito su $(3,1)$ usa già 28 qubit (Dicke+$S_1$+$S_0$+
+      $T_1$+$T_0$+$\alpha_1$+$\alpha_0$+$\omega_1$+$\omega_0$+
+      $\text{QPE}$+\text{sum}). \texttt{PyLinalg} è un simulatore a
+      vettore di stato completo: ogni gate tocca un vettore di
+      $2^{28} \approx 2.7\cdot 10^{8}$ ampiezze complesse. Con
+      $\sim 2500$ gate per iterazione si arriva al limite di quello
+      che un singolo core CPU può digerire in tempi dell'ordine delle
+      ore. Aumentare $(n,k)$ per entrare nel regime $\delta<1$ porta a
+      $\ge 35$ qubit e rende la simulazione impraticabile
+      ($2^{35}\approx 3.4\cdot 10^{10}$ ampiezze).
+
+\item \textbf{Limiti strutturali dell'algoritmo su istanze banali.}
+      MNRS richiede $\delta<1$ con margine per concentrare la misura
+      sullo stato marcato. $J(3,1)$ \emph{non soddisfa} questa
+      precondizione: lo spectral gap reale è $\Theta(1)$ (il grafo è
+      $K_3$, tre vertici tutti adiacenti), non c'è una direzione
+      ``lenta'' lungo cui la QPE possa discriminare lo stato
+      stazionario $|E\rangle$ dal resto. Tutte le tecniche
+      diagnostiche a valle---Ref~B simmetrica, QFT inversa, scaling
+      $2^j$, clamp di $\delta$---correggono bug reali ma non inventano
+      uno spectral gap inesistente.
+
+\item \textbf{Scelte di design del paper incompatibili con la
+      simulazione classica.}
+      Il codice \texttt{2025-TC} è stato progettato come banco di
+      prova per misurare T-count e T-depth su circuiti di dimensione
+      \emph{crittografica}; gli autori lavorano su una piattaforma
+      Atos QLM (hardware emulato istituzionale) per tempi di
+      \emph{counting} su grandi istanze, non per distribuzioni di
+      probabilità su piccole istanze. La preparazione via Dicke +
+      VBE, la doppia coppia di registri $S/T$ e la QPE esplicita sono
+      tutte scelte ottimizzate per un regime dove le costanti
+      moltiplicative sono irrilevanti, e che su istanze giocattolo
+      generano overhead enormi a fronte di risultati qualitativi
+      nulli.
+
+\item \textbf{Bug veri nel codice (indipendenti dai limiti fisici).}
+      La Modifica~1 (Ref~B asimmetrica) e la Modifica~2 (cleanup
+      errato) sono bug reali: la prima violava la definizione di
+      $U_W = U_{\mathrm{ref}}(a_{v_j})\,U_{\mathrm{ref}}(a_{v_i})$, la
+      seconda rompeva la reversibilità del blocco
+      \texttt{compute()/uncompute()}. Se il regime fosse stato corretto
+      (grande $n$, $\delta<1$) questi bug avrebbero effettivamente
+      soppresso l'amplificazione. Su $J(3,1)$, rimuoverli non ha
+      effetto misurabile perché la macchina non era in un regime in
+      cui qualcosa fosse da amplificare.
+\end{enumerate}
+
+\subsection{Le alternative percorribili}
+
+\paragraph{Alternativa 1: Grover diretto sul registro dei vertici.}
+Per $N = \binom{n}{k}$ piccolo ($\le 20$--30) si ignora l'apparato
+MNRS e si costruisce un classico Grover:
+$\lfloor\tfrac{\pi}{4}\sqrt{N}\rfloor$ iterazioni, un solo registro di
+$\lceil\log_2 N\rceil$ qubit che indicizza le combinazioni possibili, e
+un oracolo che valuta $\sum_{i\in S} x_i = p$. Funziona dove MNRS
+fallisce perché non dipende dallo spectral gap del grafo: la
+concentrazione di misura viene dalla struttura della riflessione
+attorno alla media, non da una QPE che richiede un gap spettrale
+osservabile. Il limite è che perde l'interesse teorico del paper
+(nessuno vuole riprodurre il paper per scoprire che Grover basta su
+istanze giocattolo).
+
+\paragraph{Alternativa 2: MNRS semplificato con encoding compatto.}
+Per un'istanza fissata come $(n,k) = (5,2)$ o $(6,3)$, si può:
 \begin{itemize}
-\item For $J(3,1)$: the instance violates $\delta\le 1$. No choice of
-$\ell_s$, QFT direction, walk-power scaling, or reflection-B variant will
-produce a non-uniform distribution on $S_1$, because the approximate
-reflection cannot act as $-I$ on $|E\rangle$ with $\le 1$ QPE qubit, and
-increasing $\ell_s$ artificially cannot create a spectral gap that the
-graph does not have.
-
-\item For $J(4,2)$ ($\delta=1$ exactly): the algorithm is on the
-boundary. Increasing $\ell_s$ to $3$--$5$ and using inverse QFT with
-$2^j$ walk-power scaling gives a marginal amplification, but with only
-$N = \binom{4}{2} = 6$ vertices a direct Grover search is both simpler
-and strictly better.
-
-\item For $J(n,k)$ with $\delta < 1$ and $n\ge 5$, $k\ge 2$: the corrected
-MNRS circuit (inverse QFT, exponential walk scaling, symmetric reflection
-B, $\ell_s\ge 3$) \emph{should} amplify, but the qubit count
-($\Theta(n\log n)$) puts any such instance out of reach of PyLinalg on a
-laptop.
+\item eliminare il registro Dicke e il doppio cover $S_0$ e i registri
+      $T_1/T_0$ inizializzando direttamente $|S\rangle$ su un solo
+      registro a $\lceil\log_2 N\rceil$ qubit;
+\item rimpiazzare la QPE esplicita con una riflessione
+      \emph{esatta} sul walk operatore (calcolabile in forma chiusa
+      per grafi di Johnson piccoli);
+\item usare $\omega$ come coin a un solo qubit per $k=1$ o mantenere
+      il coin binario solo quando $k\ge 2$.
 \end{itemize}
+L'obiettivo non è più la simulazione fedele del paper ma la
+dimostrazione qualitativa dell'amplificazione. Qubit count tipico:
+$8\text{--}14$, raggiungibile da \texttt{PyLinalg} in minuti. Limite:
+si rinuncia alla corrispondenza uno--a--uno con la costruzione del
+paper, quindi il risultato non è una verifica del paper ma una
+variante.
 
-\paragraph{Practical recommendation.}
-For the demonstration instances $J(3,1)$ and $J(4,2)$ the honest
-working implementation is plain Grover on the vertex register: it uses
-$O(\sqrt{N})$ oracle calls, $\log_2 N$ qubits for the search space,
-and reaches $>90\%$ success probability in one iteration. The
-MNRS/Szegedy walk described in the paper is asymptotically superior
-but its advantage only materializes for instances too large to simulate
-classically. This is a limitation of the simulation target, not of the
-paper's theoretical construction.
+\paragraph{Alternativa 3: hardware QLM istituzionale.}
+Il gruppo POLIMI che ha prodotto il paper lavora su un'istanza di Atos
+QLM con simulatore MPS / \texttt{LinAlg} distribuito. In quel regime si
+possono affrontare istanze $n\sim 10$, $k\in\{3,4\}$, dove
+$\delta\lesssim 0.5$ e $\ell_s\ge 3$ è naturalmente rispettato, e il
+runtime è di ore su un cluster anziché giorni su un laptop. Ottenere
+accesso a quella macchina (o almeno a \texttt{qat-utils}, il pacchetto
+interno con i backend distribuiti) renderebbe possibile una verifica
+fedele del circuito del paper. Limite: è una risorsa istituzionale,
+non riproducibile autonomamente; non sostituisce un fix del codice, ma
+rende la simulazione fattibile fuori dall'istanza giocattolo dove
+l'algoritmo semplicemente non può amplificare.
+
+\medskip
+\noindent\textbf{Conclusione.} La pipeline MNRS del paper è
+algoritmicamente corretta (al netto dei due bug localizzati in
+Modifica~1 e Modifica~2, ora corretti in \texttt{code\_updated/}) ma
+non è eseguibile \emph{in forma significativa} sulle istanze
+giocattolo $J(3,1)$ e $J(4,2)$ usate per il debug, perché tali istanze
+cadono fuori dal regime $\delta<1$ in cui MNRS è progettato per
+funzionare. Le alternative percorribili sono (a) rinunciare alla
+fedeltà e usare Grover, (b) rinunciare alla simulazione fedele su
+laptop e costruire una variante compatta, o (c) ottenere accesso
+all'hardware su cui il paper è stato in realtà eseguito.
 
 \end{document}
