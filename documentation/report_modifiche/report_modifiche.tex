@@ -10,6 +10,7 @@
 \usepackage{xcolor}
 \usepackage{hyperref}
 \usepackage{booktabs}
+\usepackage{float}
 
 \hypersetup{colorlinks=true, linkcolor=blue, urlcolor=blue, citecolor=blue}
 
@@ -42,10 +43,8 @@
 }
 
 \title{\textbf{Report on the modifications to \texttt{cssp.py}}\\[0.3em]
-\large MNRS Quantum Walk Search for the CSSP:\\
+\large
 chronology of the changes and final diagnosis}
-\author{Jacopo Bellosi}
-\date{April 2026}
 
 \begin{document}
 \maketitle
@@ -63,22 +62,22 @@ code could be run end-to-end on a classical state-vector simulator
 the vertex register $S_1$. Instead, a direct run of \texttt{cssp.py} on
 the small toy instance $n{=}3$, $k{=}1$, \texttt{values}=[1,2,3],
 \texttt{target\_sum}=3 (chosen only because it is small enough to be
-simulated on a laptop) returned a \emph{flat} probability distribution
+simulated) returned a \emph{flat} probability distribution
 over the three admissible values. A second run, instrumented with
 checkpoints at every stage of the circuit, shows that the circuit is
 compiled and simulated without errors, but that the phase flip applied
 by the oracle is not converted into amplitude by the diffusion step.
 
-\begin{table}[h]
+\begin{table}[H] % 'H' forza la posizione esatta
 \centering
-\small
-\begin{tabular}{@{}p{0.47\linewidth} p{0.47\linewidth}@{}}
+\footnotesize % Font leggermente più piccolo per farla stare in una pagina
+\begin{tabular}{@{}p{0.48\linewidth} p{0.48\linewidth}@{}}
 \toprule
-\textbf{(a) Direct run of \texttt{cssp.py}} &
+\textbf{(a) Direct run of \texttt{cssp.py}} & 
 \textbf{(b) Run with intermediate checkpoints} \\
 \midrule
 \begin{minipage}[t]{\linewidth}
-\begin{lstlisting}[style=plain]
+\begin{lstlisting}[style=plain, basicstyle=\ttfamily\scriptsize]
 n=3, k=1, values=[1,2,3], target=3
 {'nbqbits': 28, 'gate_size': 2547}
 
@@ -90,9 +89,9 @@ Final measurement on S_1:
 (runtime: ~11h CPU on a single core)
 \end{lstlisting}
 \end{minipage}
-&
+& 
 \begin{minipage}[t]{\linewidth}
-\begin{lstlisting}[style=plain]
+\begin{lstlisting}[style=plain, basicstyle=\ttfamily\scriptsize]
 Ckpt 1  Dicke + VBE:
   6 states, p=0.167, ampl=+0.408
   uniform over the 3 subsets
@@ -124,12 +123,7 @@ Final measurement on S_1:
 \end{minipage}\\
 \bottomrule
 \end{tabular}
-\caption{Output of the original code. The final distribution on $S_1$
-is identical to the initial Dicke-state distribution $|D^3_1\rangle$.
-The oracle correctly applies a phase flip to the marked states at
-Checkpoint~3; the approximate reflection (Checkpoints~4--5) scatters
-the signs instead of rotating them, and the marked amplitude is never
-turned into measurable probability.}
+\caption{Output of the original code. The final distribution on $S_1$ is identical to the initial Dicke-state distribution $|D^3_1\rangle$. The oracle correctly applies a phase flip to the marked states; the approximate reflection scatters the signs instead of rotating them.}
 \label{tab:baseline}
 \end{table}
 
@@ -144,20 +138,12 @@ attempts to understand where the amplification was lost.
 \label{sec:mod}
 % =====================================================================
 
-The chronology below is reconstructed from the local git history;
+The chronology below is reconstructed from the git history;
 commits sharing the same underlying idea are grouped into a single
-subsection, and only the date is reported (the commit hashes are in
-the repository). All final measurements were taken on the same
+subsection. All final measurements were taken on the same
 toy instance $J(3,1)$ with target $p{=}3$, to keep a homogeneous
 baseline for the comparison.
 
-For completeness: a later attempt replaced the direct QFT inside the
-QPE block by its inverse $\mathrm{QFT}^{\dagger}$, which is the
-textbook form of QPE. The fix is theoretically needed but on this toy
-instance it does not change the measured output (for $\ell_s=1$ QFT
-reduces to $H$; for $\ell_s=3$ the two differ only by phases that do
-not translate into amplitude here). The change is therefore recorded
-but not described as a separate subsection.
 
 % ---------------------------------------------------------------------
 \subsection*{Modification 1 -- Fixing the Reflection B logic
@@ -461,7 +447,7 @@ After the modifications in Section~\ref{sec:mod} the final distribution
 on $S_1$ is still exactly $(\tfrac13,\tfrac13,\tfrac13)$. The reason is
 not a single local bug, but a mismatch between the regime in which
 MNRS is designed to work and the toy instances chosen for the
-experiments. Before going further: the instances $J(3,1)$ and $J(4,2)$
+experiments. The instances $J(3,1)$ and $J(4,2)$
 used during debugging were picked as deliberately \emph{small} examples,
 so that the full state vector could be simulated on a laptop. They are
 not representative of the instances the paper targets, and their job
@@ -518,8 +504,7 @@ simulator, so every gate touches a vector of $2^{28}\approx 2.7\cdot
 10^8$ complex amplitudes; with about 2500 gates per iteration a single
 run already lasts several hours on a single core. Growing $(n,k)$ into
 the regime $\delta<1$ pushes the qubit count above 35, multiplying the
-state-vector size by $\sim 128$ and making the simulation unfeasible
-on a laptop. The second cause is a \emph{structural} limit of MNRS on
+state-vector size by $\sim 128$ and making the simulation unfeasible. The second cause is a \emph{structural} limit of MNRS on
 trivial instances: the algorithm requires $\delta<1$ with some margin
 to concentrate the measure on the marked state, and $J(3,1)$ simply
 does not have that margin; the graph is $K_3$, so its spectral gap is
