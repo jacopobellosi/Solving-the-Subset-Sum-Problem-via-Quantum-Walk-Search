@@ -229,7 +229,7 @@ $\alpha$ and $\omega$ are \emph{not} in $|0\rangle$: they are in a
 superposition that is entangled with the visited vertices. Calling
 \texttt{generate} as if they were in $|0\rangle$ does not remove
 gates, it adds them, and it destroys the walk coherence right before
-the inverse QFT. The correct uncomputation is already provided
+the final QFT. The correct uncomputation is already provided
 automatically by myQLM's \texttt{prw.uncompute()} at the end of the
 compute block.
 
@@ -510,8 +510,8 @@ to concentrate the measure on the marked state, and $J(3,1)$ simply
 does not have that margin; the graph is $K_3$, so its spectral gap is
 $\Theta(1)$ and there is no slow direction for the QPE to discriminate
 $|E\rangle$ from the rest of the spectrum. All downstream techniques
-tried in Section~\ref{sec:mod} (symmetric Ref~B, inverse QFT, $2^j$
-scaling, $\delta$ clamp) fix genuine bugs but cannot manufacture a gap
+tried in Section~\ref{sec:mod} (symmetric Ref~B, $2^j$ scaling,
+$\delta$ clamp) fix genuine bugs but cannot manufacture a gap
 that is not there. The third cause is the set of \emph{genuine bugs} in the
 code that are independent of the regime: Modification~1 (the
 asymmetric Ref~B) and Modification~2 (the wrong cleanup block) are

@@ -5,7 +5,7 @@ Starting point: the reference code shipped with Lancellotti et al.,
 "Solving the Subset Sum Problem via Quantum Walk Search" (IEEE TC, 2026)
 in code_2025TC/cssp.py.
 
-The file below differs from the paper code only by the five changes
+The file below differs from the paper code only by the four changes
 documented in documentation/report_modifiche/report_modifiche.tex:
 
   Mod 1 (17 March 2026) -- symmetric Reflection A/B around the full
@@ -16,8 +16,12 @@ documented in documentation/report_modifiche/report_modifiche.tex:
                            variant; delete() in sliding_sort_array.py
                            now calls insert_lw(...).dag() internally;
   Mod 4 (27 March)      -- delta clamped to (0, 1] and len_s clamped
-                           to a minimum of 3 QPE qubits;
-  Mod 5 (13 April)      -- inverse QFT at the end of the QPE block.
+                           to a minimum of 3 QPE qubits.
+
+The direct QFT of the paper is kept: replacing it with its .dag() was
+tried during debugging but could not be validated on J(3,1) (the
+distribution is flat either way for lack of spectral gap), and the
+paper's convention is internally consistent.
 
 The instrumented copy that prints the state at every checkpoint lives
 in code_2025TC/cssp_with_checkpoint.py; that file is intentionally
@@ -223,8 +227,7 @@ def main(n,
             # compute/uncompute already takes care of the correct
             # uncomputation at the end of this block.
 
-            # Mod 5: inverse QFT (textbook QPE), not the direct QFT.
-            prw.apply(QFT(len_s).dag(), qpe_s)
+            prw.apply(QFT(len_s), qpe_s)
 
         # Diffusion: inversion around |0...0> on the QPE register.
         for j in range(len_s):
