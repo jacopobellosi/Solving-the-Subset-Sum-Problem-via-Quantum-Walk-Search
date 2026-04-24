@@ -328,6 +328,23 @@ the walk needs many steps to mix, and MNRS wins against brute force;
 a $\delta$ close to $1$ means the walk mixes in a handful of steps, so
 $1/\sqrt{\delta} = O(1)$ and there is no quadratic regime to observe.
 
+\emph{$\ell_s$ in one line.} The integer $\ell_s$ is the number of
+qubits allocated to the auxiliary QPE register on which Hadamards,
+controlled walk powers $U_W^{2^j}$ and the final QFT act: it sets
+the \emph{phase resolution} of the approximate reflection. With
+$\ell_s$ qubits the QPE distinguishes $2^{\ell_s}$ possible phases,
+so its precision in reading the eigenphases of $U_W$ is $\sim 2\pi /
+2^{\ell_s}$. To act as the textbook reflection $+I$ on the stationary
+state $|E\rangle$ / $-I$ on its complement, this precision must be
+finer than the smallest non-zero phase in the spectrum of $U_W$,
+which is of order $\sqrt{\delta}$. Solving $2\pi / 2^{\ell_s}
+\lesssim \sqrt{\delta}$ gives the paper's formula $\ell_s =
+\lceil \log_2(\pi / 2\sqrt{\delta})\rceil$: just enough qubits to
+tell the stationary phase apart from the rest. If $\ell_s$ is too
+small the QPE ``sees'' all eigenphases as the same bucket and the
+block stops acting like a reflection; if $\ell_s$ is larger than
+needed, the circuit grows but the behaviour does not improve.
+
 The paper uses the Johnson-graph formula
 \[
 \delta \;=\; \frac{n}{k(n-k)},
