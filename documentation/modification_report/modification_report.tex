@@ -47,12 +47,11 @@
 \large
 chronology of the changes and final diagnosis.
 
-https://github.com/jacopobellosi/Solving-the-Subset-Sum-Problem-via-Quantum-Walk-Search
+\url{https://github.com/jacopobellosi/Solving-the-Subset-Sum-Problem-via-Quantum-Walk-Search}
 }
 
 \begin{document}
 \maketitle
-
 % =====================================================================
 \section{The starting problem}
 % =====================================================================
@@ -166,10 +165,7 @@ controlled the phase flip only on \texttt{wstate\_ones} via
 \texttt{Z.ctrl(k)}, and Reflection~B (lines 143--153) did the
 analogous thing on \texttt{wstate\_zeros} only, with a further typo in
 the second $X$-sandwich
-(\texttt{for j in range(k)} instead of \texttt{range(n-k)}). In plain
-words: the \texttt{ctrl-Z} must fire when the \emph{whole} coin
-register is in $|0\cdots0\rangle$, not only a part of it, and the
-$X$-gates must be applied to both halves of the coin symmetrically.
+(\texttt{for j in range(k)} instead of \texttt{range(n-k)}).
 The snippet below shows Ref~B; Ref~A had the analogous defect and is
 fixed in the same way.
 
