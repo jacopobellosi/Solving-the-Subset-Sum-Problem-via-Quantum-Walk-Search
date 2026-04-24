@@ -6,7 +6,7 @@ Starting point: the reference code shipped with Lancellotti et al.,
 in code_2025TC/cssp.py.
 
 The file below differs from the paper code only by the four changes
-documented in documentation/report_modifiche/report_modifiche.tex:
+documented in documentation/modification_report/modification_report.tex:
 
   Mod 1 (17 March 2026) -- symmetric Reflection A/B around the full
                            all-zero coin state;

@@ -68,9 +68,9 @@ checkpoints at every stage of the circuit, shows that the circuit is
 compiled and simulated without errors, but that the phase flip applied
 by the oracle is not converted into amplitude by the diffusion step.
 
-\begin{table}[H] % 'H' forza la posizione esatta
+\begin{table}[H] % 'H' forces the exact position
 \centering
-\footnotesize % Font leggermente più piccolo per farla stare in una pagina
+\footnotesize % slightly smaller font to keep the table on a single page
 \begin{tabular}{@{}p{0.48\linewidth} p{0.48\linewidth}@{}}
 \toprule
 \textbf{(a) Direct run of \texttt{cssp.py}} & 
@@ -539,6 +539,28 @@ fixing them is necessary for correctness but invisible on the final
 distribution.
 
 \subsection{Viable alternatives}
+
+\emph{Scope of the alternatives.} The two routes described below are
+\emph{not} meant to replace MNRS in its native regime: they are
+pragmatic alternatives for the narrow window in which one wants to
+run the algorithm \emph{on small instances that still fit a
+state-vector simulator}. Concretely, the paper-faithful MNRS
+circuit uses already $28$ qubits at $(n,k)=(3,1)$ and grows as
+$\Theta(n \log n)$, crossing the $\approx 30$-qubit ceiling of
+\texttt{PyLinalg} on commodity hardware around $(5,2)$--$(6,3)$. The
+interesting window is therefore roughly
+\[
+n \;\lesssim\; 6\text{--}7,
+\qquad
+N \;=\; \binom{n}{k} \;\lesssim\; 20\text{--}30 \text{ vertices},
+\]
+i.e.\ a $\times 10^{2}$--$10^{3}$ reduction in search-space size
+compared to the paper's target ($n \ge 25$ for T-count,
+$n \ge 2^{13}$ for T-depth). Above this threshold the simulator
+cannot follow and the only meaningful execution is on
+fault-tolerant quantum hardware as envisioned by the paper; below
+it, the alternatives below produce a working demo on a laptop
+without pretending to recover the asymptotic MNRS speed-up.
 
 There are essentially two reasonable ways to move forward. The first
 is to drop MNRS altogether and run a \emph{direct Grover search} on

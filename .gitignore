@@ -11,3 +11,4 @@ documentation/*.md
 Documentation/*.txt
 .claude/agents/quantum-walk-ssp-debugger.md
 /.claude
+/.*
