@@ -146,8 +146,8 @@ baseline for the comparison.
 
 
 % ---------------------------------------------------------------------
-\subsection*{Modification 1 -- Fixing the Reflection B logic
-(17 March 2026)}
+\subsection*{Modification 1 -- Making Reflections A and B symmetric
+on the full coin (17 March 2026)}
 % ---------------------------------------------------------------------
 
 The paper defines the walk operator as a double reflection,
@@ -156,13 +156,18 @@ U_W \;=\; U_{\mathrm{ref}}(a_{v_j})\,U_{\mathrm{ref}}(a_{v_i})
 \;=\; U_U U_U\,U_{\mathrm{ref}}(0)\,U_U U_U\,U_{\mathrm{ref}}(0)\,U_U,
 \]
 i.e.\ two symmetric reflections around the all-zero coin state. In the
-original code the second reflection (``Ref~B'') was implemented in an
-asymmetric way: the phase flip was controlled only on
-\texttt{wstate\_zeros}, and the $X$-gates that move $|0\cdots0\rangle$
-onto the target state were applied only partially. In plain words: the
-\texttt{ctrl-Z} must fire when the \emph{whole} coin register is in
-$|0\cdots0\rangle$, not only a part of it, and the $X$-gates must be
-applied to both halves of the coin symmetrically.
+original code \emph{both} reflections were implemented asymmetrically:
+Reflection~A (lines 130--140 of \texttt{code\_2025TC/cssp.py})
+controlled the phase flip only on \texttt{wstate\_ones} via
+\texttt{Z.ctrl(k)}, and Reflection~B (lines 143--153) did the
+analogous thing on \texttt{wstate\_zeros} only, with a further typo in
+the second $X$-sandwich
+(\texttt{for j in range(k)} instead of \texttt{range(n-k)}). In plain
+words: the \texttt{ctrl-Z} must fire when the \emph{whole} coin
+register is in $|0\cdots0\rangle$, not only a part of it, and the
+$X$-gates must be applied to both halves of the coin symmetrically.
+The snippet below shows Ref~B; Ref~A had the analogous defect and is
+fixed in the same way.
 
 \begin{lstlisting}[language=Python]
 # --- Before (original) ---
@@ -209,10 +214,10 @@ n=3, k=1, values=[1,2,3], target=3
 (runtime: 11h 37min CPU)
 \end{lstlisting}
 
-After the fix, Reflection~B matches the formula above. The bug is
-real and had to be fixed for correctness, but on this toy instance
-it is not what is hiding the amplification: the output distribution
-is still flat.
+After the fix, \emph{both} Reflection~A and Reflection~B match the
+formula above. The bug is real and had to be fixed for correctness,
+but on this toy instance it is not what is hiding the amplification:
+the output distribution is still flat.
 
 % ---------------------------------------------------------------------
 \subsection*{Modification 2 -- Removal of the
@@ -228,10 +233,12 @@ ancillas to preserve reversibility. The issue is that at that point
 $\alpha$ and $\omega$ are \emph{not} in $|0\rangle$: they are in a
 superposition that is entangled with the visited vertices. Calling
 \texttt{generate} as if they were in $|0\rangle$ does not remove
-gates, it adds them, and it destroys the walk coherence right before
-the final QFT. The correct uncomputation is already provided
-automatically by myQLM's \texttt{prw.uncompute()} at the end of the
-compute block.
+gates, it adds them: the cleanup acts as a non-trivial unitary on an
+entangled state instead of an identity, corrupting the expected
+state of $\alpha$ and $\omega$ right before the final QFT and
+breaking the intended uncompute relation. The correct uncomputation
+is already provided automatically by myQLM's \texttt{prw.uncompute()}
+at the end of the compute block.
 
 \begin{lstlisting}[language=Python]
 # --- Before (original) ---
@@ -281,14 +288,22 @@ parallel but needs extra ancillas. From the paper:
 update operator. \ldots{} The low-depth strategy \ldots{} improves
 circuit depth at the cost of additional ancillary qubits.''
 \end{quote}
-In the reference code \texttt{cssp.py} the \texttt{delete} routine was
-internally calling \texttt{insert\_ld} (the low-depth variant). The
-low-depth variant leaves some ancilla qubits in a non-zero state after
-its \texttt{.dag()}, which breaks the reversibility of the update
-operator $U_U$. The walk operator $U_W = U_U\cdots U_U$ is then no
-longer unitary on the visible registers, and the QPE-based
-approximate reflection degrades. The fix is to switch to
-\texttt{insert\_lw}, which is clean w.r.t.\ ancillas.
+In the reference code \texttt{cssp.py} the \texttt{delete} routine
+was internally calling \texttt{insert\_ld(...).dag()}. Empirically,
+running \texttt{delete} back-to-back with \texttt{insert} via
+\texttt{insert\_ld} failed a reversibility sanity check (the
+composite was not the identity on a small non-ancilla input), while
+the same pattern with \texttt{insert\_lw} passed; a source-level
+comment in \texttt{sliding\_sort\_array.py} already flagged
+\texttt{insert\_ld} as ``not properly reversible (garbage in
+ancillas)''. Since the walk operator
+$U_W = U_U\cdots U_U$ composes many \texttt{insert}/\texttt{delete}
+calls, any leakage in the ancillas of a single call propagates and
+degrades the QPE-based approximate reflection. The fix is therefore
+to route \texttt{delete} through \texttt{insert\_lw(...).dag()}.
+The precise source of the failure inside \texttt{insert\_ld} was not
+localised: the point below is only that swapping to
+\texttt{insert\_lw} is sufficient in practice.
 
 \begin{lstlisting}[language=Python]
 # --- Before ---
@@ -332,32 +347,40 @@ $1/\sqrt{\delta} = O(1)$ and there is no quadratic regime to observe.
 qubits allocated to the auxiliary QPE register on which Hadamards,
 controlled walk powers $U_W^{2^j}$ and the final QFT act: it sets
 the \emph{phase resolution} of the approximate reflection. With
-$\ell_s$ qubits the QPE distinguishes $2^{\ell_s}$ possible phases,
-so its precision in reading the eigenphases of $U_W$ is $\sim 2\pi /
-2^{\ell_s}$. To act as the textbook reflection $+I$ on the stationary
-state $|E\rangle$ / $-I$ on its complement, this precision must be
-finer than the smallest non-zero phase in the spectrum of $U_W$,
-which is of order $\sqrt{\delta}$. Solving $2\pi / 2^{\ell_s}
-\lesssim \sqrt{\delta}$ gives the paper's formula $\ell_s =
-\lceil \log_2(\pi / 2\sqrt{\delta})\rceil$: just enough qubits to
-tell the stationary phase apart from the rest. If $\ell_s$ is too
-small the QPE ``sees'' all eigenphases as the same bucket and the
-block stops acting like a reflection; if $\ell_s$ is larger than
-needed, the circuit grows but the behaviour does not improve.
-
-The paper uses the Johnson-graph formula
+$\ell_s$ qubits the QPE distinguishes $2^{\ell_s}$ possible phases.
+For the approximate reflection to act as $+I$ on the stationary
+state $|E\rangle$ and as $-I$ on its complement (up to a global
+phase), $\ell_s$ must be large enough that the stationary eigenphase
+of $U_W$ falls into a bin separated from the nearest non-stationary
+eigenphase. The paper adopts the standard MNRS precision requirement
+(cf.\ Magniez--Nayak--Roland--Santha 2011, Thm.~6), which for a
+walk with spectral gap $\delta$ reads $2^{\ell_s} \ge
+\pi / (2\sqrt{\delta})$, hence
 \[
-\delta \;=\; \frac{n}{k(n-k)},
-\qquad
-\ell_s \;=\; \left\lceil \log_2\!\frac{\pi}{2\sqrt{\delta}} \right\rceil,
+\ell_s \;=\; \left\lceil \log_2\!\frac{\pi}{2\sqrt{\delta}} \right\rceil.
 \]
-which is exact for $J(n,k)$, but designed for instances with
+If $\ell_s$ is too small the QPE ``sees'' all eigenphases as the same
+bucket and the block stops acting like a reflection; if $\ell_s$ is
+larger than needed, the circuit grows but the behaviour does not
+improve.
+
+The spectral gap in this formula is the standard one of the
+transition matrix (equivalently, the normalized-Laplacian gap), and
+for the Johnson graph $J(n,k)$ is known in closed form:
+\[
+\delta \;=\; \frac{n}{k(n-k)}.
+\]
+This is exact, but the formula is designed for instances with
 $k(n-k)\ge n$. For the toy instance $(n,k)=(3,1)$ one gets
-$\delta=1.5$ and $\ell_s=1$: a single QPE qubit is not enough to
-resolve the phase of $|E\rangle$ from the other eigenphases of $U_W$,
-so the block that is supposed to implement an approximate reflection
-does not act as a reflection at all. As a defensive patch, $\delta$
-is clamped to $1$ and $\ell_s$ is forced to at least $3$ qubits.
+$\delta = 1.5$, which is a formal artifact: a genuine spectral gap
+of a reversible walk sits in $(0,1]$, and $\delta>1$ signals that we
+are outside the regime where the Johnson-graph formula is meant to
+apply. Plugging this value back into $\ell_s$ yields $\ell_s=1$: a
+single QPE qubit is not enough to resolve the phase of $|E\rangle$
+from the other eigenphases of $U_W$, so the block that is supposed
+to implement an approximate reflection does not act as a reflection
+at all. As a defensive patch, $\delta$ is clamped to $1$ and
+$\ell_s$ is forced to at least $3$ qubits.
 
 \begin{lstlisting}[language=Python]
 # --- Before ---
@@ -440,18 +463,21 @@ inside the QPE-based approximate reflection.
 \emph{Why this matters and what it implies.} At Checkpoint~3 the
 circuit is in exactly the state that a textbook Grover diffusion
 would now rotate into an amplitude peak: non-marked states have
-amplitude $+0.289$, marked states have $-0.289$. What the approximate
-reflection $U_{\mathrm{ref}}(E)$ is supposed to do is act as $+I$ on
-the stationary walk state $|E\rangle$ and as $-I$ on its orthogonal
-complement, producing a net rotation that concentrates probability on
-the marked subspace. In practice we see the signs become mixed and
-evenly distributed, i.e.\ the reflection is acting like a random
-sign-scrambler rather than a reflection. This is the fingerprint of a
-QPE run with $\ell_s$ too small to resolve the phase of $|E\rangle$
+amplitude $+0.289$, marked states have $-0.289$. Up to a global
+phase, the approximate reflection $U_{\mathrm{ref}}(E)$ is supposed
+to act oppositely on the stationary walk state $|E\rangle$ and on
+its orthogonal complement ($+I$ on one and $-I$ on the other in
+MNRS; conventions differ by a global sign in some references),
+producing a net rotation that concentrates probability on the marked
+subspace. In practice we see the signs become mixed and evenly
+distributed, i.e.\ the reflection is acting like a random
+sign-scrambler rather than a reflection. This is the fingerprint of
+a QPE run with $\ell_s$ too small to resolve the phase of $|E\rangle$
 from the other eigenphases of $U_W$, which on $J(3,1)$ is unavoidable
 because the walk mixes in $O(1)$ steps and $1/\sqrt{\delta}=O(1)$: no
 further patch inside the QPE block will fix the result on this
-instance, the regime itself lies outside the one MNRS is built for.
+instance, the regime itself lies outside the one in which MNRS
+delivers its quadratic speed-up.
 
 % =====================================================================
 \section{Why it does not work}
@@ -515,8 +541,10 @@ It is important to separate three causes that look like the same
 symptom on a flat output distribution but are actually independent.
 The first is a purely \emph{physical} limit of classical simulation:
 already at $(3,1)$ the circuit uses 28 qubits (Dicke, $S_1$, $S_0$,
-$T_1$, $T_0$, $\alpha_1$, $\alpha_0$, $\omega_1$, $\omega_0$, QPE and
-Sum registers), and \texttt{PyLinalg} is a full state-vector
+$T_1$, $T_0$, $\alpha_1$, $\alpha_0$, $\omega_1$, $\omega_0$, QPE
+and Sum registers, as shown by the \texttt{Program qubits} dump in
+\texttt{01\_baseline\_original\_code\_flat\_output.txt}), and
+\texttt{PyLinalg} is a full state-vector
 simulator, so every gate touches a vector of $2^{28}\approx 2.7\cdot
 10^8$ complex amplitudes; with about 2500 gates per iteration a single
 run already lasts several hours on a single core. Growing $(n,k)$ into
@@ -526,10 +554,11 @@ trivial instances: the algorithm requires $\delta<1$ with some margin
 to concentrate the measure on the marked state, and $J(3,1)$ simply
 does not have that margin; the graph is $K_3$, so its spectral gap is
 $\Theta(1)$ and there is no slow direction for the QPE to discriminate
-$|E\rangle$ from the rest of the spectrum. All downstream techniques
-tried in Section~\ref{sec:mod} (symmetric Ref~B, $2^j$ scaling,
-$\delta$ clamp) fix genuine bugs but cannot manufacture a gap
-that is not there. The third cause is the set of \emph{genuine bugs} in the
+$|E\rangle$ from the rest of the spectrum. No amount of tuning inside the
+reflection block can widen the spectral gap of $U_W$ on $K_3$: the
+techniques tried in Section~\ref{sec:mod} (symmetric Ref~A/B,
+$2^j$ scaling, $\delta$ clamp) fix genuine bugs but operate
+downstream of $U_W$, whose spectrum is fixed by the graph. The third cause is the set of \emph{genuine bugs} in the
 code that are independent of the regime: Modification~1 (the
 asymmetric Ref~B) and Modification~2 (the wrong cleanup block) are
 real bugs and they have been fixed, and in a regime where MNRS has a
@@ -554,10 +583,11 @@ n \;\lesssim\; 6\text{--}7,
 \qquad
 N \;=\; \binom{n}{k} \;\lesssim\; 20\text{--}30 \text{ vertices},
 \]
-i.e.\ a $\times 10^{2}$--$10^{3}$ reduction in search-space size
-compared to the paper's target ($n \ge 25$ for T-count,
-$n \ge 2^{13}$ for T-depth). Above this threshold the simulator
-cannot follow and the only meaningful execution is on
+This is orders of magnitude below the paper's own target
+($n \ge 25$ for lower T-count, $n \ge 2^{13}$ for lower T-depth),
+but that gap is expected: classical state-vector simulation caps at
+roughly 30 qubits on commodity hardware. Above this threshold the
+simulator cannot follow and the only meaningful execution is on
 fault-tolerant quantum hardware as envisioned by the paper; below
 it, the alternatives below produce a working demo on a laptop
 without pretending to recover the asymptotic MNRS speed-up.
@@ -592,9 +622,10 @@ while keeping the walk structure intact.
 algorithmically correct once the two localised bugs in
 Modifications~1 and~2 are removed (the fixed version lives in
 \texttt{code\_updated/}), but it cannot be executed \emph{in a
-meaningful way} on the toy instances $J(3,1)$ and $J(4,2)$, because
-those instances sit outside the regime $\delta<1$ for which MNRS is
-designed. The paper itself is explicit about this: its complexity
+meaningful way} on the toy instances $J(3,1)$ and $J(4,2)$: on those
+instances $1/\sqrt{\delta}=O(1)$, so MNRS still runs but produces no
+amplification window, and $\ell_s$ is too small for the approximate
+reflection to be resolved. The paper itself is explicit about this: its complexity
 analysis targets the cryptographic scale ($n\ge 25$ for lower T-count,
 $n\ge 2^{13}$ for lower T-depth) on fault-tolerant hardware, and notes
 that the $n\log_2 n$ qubit overhead ``significantly limits the
