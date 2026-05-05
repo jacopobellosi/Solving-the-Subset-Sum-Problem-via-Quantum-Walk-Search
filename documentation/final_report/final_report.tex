@@ -69,130 +69,163 @@ Politecnico di Milano}
 
 \subsection{Goal of the project}
 
-The goal of this Software Engineering 2 research project was to
-\emph{reproduce the results} of the paper \emph{``Solving the
-Subset Sum Problem via Quantum Walk Search''} (Lancellotti,
-Perriello, Barenghi, Pelosi; IEEE Transactions on Computers,
-vol.~75, n.~1, 2026). The paper proposes a gate-level quantum
-algorithm for the Constrained Subset Sum Problem (CSSP) and
-publishes a reference implementation in \texttt{myQLM}; our task
-was to read this material, run it on a small instance, and check
-whether the simulated output matched the expected behaviour.
+The objective of this project was to \emph{reproduce the results}
+of the paper \emph{``Solving the Subset Sum Problem via Quantum
+Walk Search''} (Lancellotti, Perriello, Barenghi, Pelosi; IEEE
+Transactions on Computers, vol.~75, n.~1, 2026). The paper
+proposes a gate-level quantum algorithm for the Constrained
+Subset Sum Problem (CSSP) and provides a reference implementation
+in \texttt{myQLM}; the task was to read the paper and the code
+thoroughly, run the algorithm on an instance small enough to be
+simulated classically, and verify whether the simulated output
+matched the expected behaviour. When the output turned out to be
+flat over all admissible solutions, the project shifted to a
+structured diagnosis of the cause and to the production of the
+smallest correctness fixes that could be agreed with the paper
+authors.
 
-\subsection{The paper in one paragraph}
+\subsection{The paper at a glance}
 
 The Subset Sum Problem (SSP) asks whether a subset of a given
 multiset of integers sums to a target value $p$. The
 \emph{constrained} variant (CSSP) further requires the subset to
 contain exactly $k$ elements. SSP is NP-complete and underlies
 several post-quantum cryptographic constructions, so it is a
-natural target for quantum algorithms. The paper attacks CSSP with
-a Magniez–Nayak–Roland–Santha (MNRS) quantum walk on the Johnson
-graph $J(n,k)$, whose vertices are the candidate $k$-subsets and
-whose edges connect subsets that differ in a single element. The
-walk is interleaved with a sum-checking oracle and with a
-QPE-based approximate reflection so that, after a number of
-iterations proportional to $\sqrt{\binom{n}{k}}$, the marked
-solution is amplified. The expected speed-up over a brute-force
-classical search is therefore quadratic, which is the same gain
-that Grover's algorithm provides in the unstructured case.
+natural target for quantum algorithms. The paper attacks CSSP
+with an MNRS quantum walk on the Johnson graph $J(n,k)$, whose
+vertices are the candidate $k$-subsets and whose edges connect
+subsets that differ in one element. The walk is interleaved with
+a sum-checking oracle and with a QPE-based approximate
+reflection so that, after a number of outer iterations of order
+$\sqrt{N/M}$ with $N=\binom{n}{k}$ and $M$ the number of
+solutions, the amplitude on the marked vertex grows.
 
-\subsection{Activities carried out}
+MNRS can be read as a generalisation of Grover's amplitude
+amplification: instead of reflecting around the uniform
+superposition over all states, it reflects around the stationary
+distribution of a quantum walk on the graph. Because that
+distribution is the unique $+1$ eigenvector of the walk operator
+$U_W$, the corresponding approximate reflection is realised by
+running Quantum Phase Estimation (QPE) on $U_W$ and flipping the
+sign of every component whose estimated phase is non-zero. The
+formal cost of the algorithm is recalled in
+Section~\ref{sec:paper}.
 
-The work was organised in nine steps, all reflected in the
-repository:
-\begin{enumerate}[leftmargin=1.4em]
-\item Studied the basics of quantum computing and of the
-\texttt{Qiskit} framework, used as a reference language for
-quantum circuits.
-\item Read the paper in depth, extracting notes on the algorithm
-and on the role of each sub-routine.
-\item Studied the reference implementation
-(\texttt{paper-codes/2025-TC}, mirrored locally in
-\texttt{code\_2025TC/}) and reconstructed the high-level structure
-of \texttt{cssp.py}.
-\item Executed the code on the smallest instance compatible with
-classical state-vector simulation, $J(3,1)$.
-\item Attempted local modifications to fix the unexpected output.
-\item Produced a structured comparison between the paper and the
-implementation, in the file
-\texttt{documentation/Code and test mapping.pptx}, to check
-whether the code met the expected functional standards.
-\item Read a set of related works
-(\texttt{documentation/paper\_comparison/}) and compared their
-methods with ours, identifying the main differences.
-\item Identified the main problems in the code together with
-their underlying reasons.
-\item Submitted the agreed fixes to the upstream repository as a
-pull request.
-\end{enumerate}
+\subsection{Structure of the report}
 
-The remainder of the report follows the same logical order:
-Section~\ref{sec:paper} describes the paper and the original
-behaviour of the code; Section~\ref{sec:work} reports the
-modifications we applied; Section~\ref{sec:compare} discusses how
-related works compare with ours; Section~\ref{sec:mapping}
-presents the analysis based on the code-and-test mapping;
-Section~\ref{sec:concl} draws the conclusions.
+Section~\ref{sec:paper} summarises the paper and the observed
+behaviour of the unmodified reference code on a small instance.
+Section~\ref{sec:work} reports the modifications applied to the
+code, in chronological order, with the corresponding diffs and
+simulation results. Section~\ref{sec:compare} discusses how
+seven related works compare with ours and explains, in plain
+terms, why their algorithms can be simulated end-to-end while the
+one in the paper cannot. Section~\ref{sec:mapping} presents the
+analysis based on the structured mapping between the paper and
+the implementation, summarising the points that were addressed
+and those that remain open. Section~\ref{sec:concl} draws the
+conclusions.
 
 % =====================================================================
-\section{Brief explanation of the paper and of the original code}
+\section{The paper and the original behaviour}
 \label{sec:paper}
 % =====================================================================
 
-\subsection{What the paper does}
+\subsection{Problem statement}
 
-The paper builds an end-to-end quantum circuit for CSSP from four
-ingredients.
+Given a multiset $X = \{x_1,\dots,x_n\}$ of positive integers and
+a target $p \in \mathbb{Z}$, the Subset Sum Problem asks whether
+there exists $S \subseteq X$ with $\sum_{x \in S} x = p$.
+The \emph{constrained} variant studied in the paper additionally
+requires $|S|=k$. The candidate subsets are then exactly the
+vertices of the Johnson graph $J(n,k)$, whose vertex set has
+cardinality $N=\binom{n}{k}$ and whose edges connect pairs of
+vertices that differ in a single element. A brute-force classical
+search costs $O(N)$ oracle calls; the paper's contribution is a
+quantum algorithm with the standard quadratic order
+$O(\sqrt{N})$, but designed inside the MNRS framework so that
+the explicit gate count and depth are smaller than a direct
+Grover construction in the cryptographic regime
+($n \ge 25$ for lower T-count, $n \ge 2^{13}$ for lower T-depth).
 
-\paragraph{(1) Johnson graph $J(n,k)$.} Each vertex is a $k$-subset
-of $\{1,\dots,n\}$; two vertices are adjacent if and only if they
-share $k-1$ elements. The graph has $\binom{n}{k}$ vertices and
-the closed-form spectral gap
+\subsection{The MNRS pipeline}
+
+The paper builds the algorithm from four components.
+
+\paragraph{(1) Johnson graph $J(n,k)$.} Each vertex is a
+$k$-subset of $\{1,\dots,n\}$; two vertices are adjacent iff they
+share $k-1$ elements. The spectral gap of the corresponding walk
+admits the closed form
 \[
-\delta = \frac{n}{k(n-k)},
-\qquad \text{valid for } k(n-k)\ge n.
+\delta \;=\; \frac{n}{k(n-k)} ,
+\qquad 1 \le k \le n-1 .
 \]
 
 \paragraph{(2) Marking oracle $U_f$.} Quantises the indicator
-function of the solution: it computes the sum of the elements of
-the current subset in an ancillary register and flips the global
-phase whenever the sum equals the target.
+function of the solution: it accumulates the sum of the elements
+of the current subset in an ancillary register and applies a
+multi-controlled phase flip whenever the sum equals the target.
 
 \paragraph{(3) Walk operator $U_W$.} The Szegedy quantisation of
-one classical step of the walk on $J(n,k)$. It is a double
-reflection, $U_W = U_{\mathrm{ref}}(a_{v_j})\,U_{\mathrm{ref}}(a_{v_i})$,
-in which the basic ``update'' sub-routine $U_U$ generates the
-superposition of the neighbours of the current vertex.
+one classical step of the walk on $J(n,k)$. It decomposes as a
+double reflection,
+\[
+U_W \;=\; U_{\mathrm{ref}}(a_{v_j})\, U_{\mathrm{ref}}(a_{v_i}),
+\qquad
+U_{\mathrm{ref}}(a_v) \;=\; U_U \, U_{\mathrm{ref}}(0) \, U_U^{\dagger},
+\]
+where $U_U$, the \emph{update operator}, generates the
+superposition of the neighbours of the current vertex. A single
+walk step therefore costs four applications of $U_U$ around the
+two reflections around the all-zero coin.
 
 \paragraph{(4) Approximate reflection via QPE.} The amplitude
-amplification step needs a reflection $U_{\mathrm{ref}}(E)$
-around the stationary state $|E\rangle$ of the walk. Since
-$|E\rangle$ has eigenphase $0$ under $U_W$ and the other
-eigenstates have non-zero eigenphase, a Quantum Phase Estimation
-(QPE) on $U_W$ acts as an approximate reflection that flips the
-sign of every state whose estimated phase is non-zero. The MNRS
-precision requirement fixes the number of QPE qubits to
-$\ell_s = \lceil \log_2(\pi/(2\sqrt\delta)) \rceil$.
+amplification step needs a reflection around the stationary
+state $|E\rangle$ of $U_W$. Since $|E\rangle$ has eigenphase $0$
+under $U_W$ and the other eigenstates have non-zero eigenphase, a
+QPE of depth $O(1/\sqrt{\delta})$ on $U_W$ acts as an approximate
+reflection that flips the sign of every state whose estimated
+phase is non-zero. The MNRS cost of the full algorithm is
+\[
+T_S \;+\; \frac{1}{\sqrt{\varepsilon}}\!\left(\frac{T_U}{\sqrt{\delta}} + T_C\right),
+\qquad \varepsilon = M/N ,
+\]
+where $T_S$ is the cost of preparing the stationary state, $T_U$
+the cost of one walk step and $T_C$ the cost of one oracle call.
+The quadratic speed-up over a classical random walk lives in the
+$1/\sqrt{\delta}$ factor: a small gap means a slowly-mixing chain
+where the walk wins, while a gap of order $1$ collapses the
+speed-up to a constant.
 
-What the paper \emph{does not} do is run the algorithm
-end-to-end. The authors validate the building blocks separately
-and explicitly state that an end-to-end execution is not
-feasible: the cryptographic regime they target is $n\ge 25$ for
-the T-count advantage and $n\ge 2^{13}$ for the T-depth
-advantage, well beyond any classical state-vector simulator.
+\subsection{What the paper validates and what it does not}
 
-\subsection{Initial doubts: the flat distribution}
+The paper provides closed-form analytical estimates of gate
+count, depth and qubit count of every sub-routine; a comparison
+against a Grover baseline showing better T-count for $n \gtrsim 32$
+and better T-depth for $n \gtrsim 2^{13}$; and reference
+open-source implementations in Qiskit and \texttt{myQLM}. It does
+not, however, run the algorithm end-to-end on any concrete
+instance: the cryptographic regime targeted by the paper is far
+above any classical state-vector simulator (Table III of the
+paper reports already 38 qubits for the smallest non-trivial
+instance $J(4,2)$ with $m=2$), and the algorithm is designed for
+fault-tolerant hardware. Validation is therefore restricted to
+the building blocks taken individually.
 
-Our first attempt was to run \texttt{cssp.py} as it is, on the
-toy instance $n=3$, $k=1$, $\mathtt{values}=[1,2,3]$,
-$\mathtt{target\_sum}=3$. With $N=\binom{3}{1}=3$ admissible
-subsets and the unique marked solution $S=\{3\}$, an amplifying
-algorithm should produce a distribution close to $(0,0,1)$ on
-the vertex register $S_1$. Instead, the simulation returned a
-\emph{flat} distribution, identical to the initial Dicke state.
-Table~\ref{tab:baseline} summarises the direct run and the run
-instrumented with intermediate checkpoints.
+\subsection{Running the code as-is on a toy instance}
+
+The first experiment consisted in a direct execution of
+\texttt{cssp.py} on the smallest instance compatible with
+classical simulation,
+$n=3$, $k=1$, $\mathtt{values}=[1,2,3]$, $\mathtt{target\_sum}=3$.
+The unique marked solution is $S=\{3\}$, so an amplifying
+algorithm should produce a distribution close to $(0,0,1)$ on the
+vertex register $S_1$. Instead, the simulation returned a flat
+distribution, identical to the initial Dicke state, after
+approximately eleven hours of single-core CPU time on a circuit
+of $28$ qubits and $\sim\!2\,500$ gates. Table~\ref{tab:baseline}
+shows the direct run side by side with a run instrumented with
+intermediate checkpoints.
 
 \begin{table}[H]
 \centering
@@ -235,133 +268,246 @@ Ckpt 6  End of iteration:
 \end{minipage}\\
 \bottomrule
 \end{tabular}
-\caption{Output of the unmodified reference code. The marginal
-distribution on $S_1$ is identical to the initial Dicke state.
-The oracle correctly flips the phase of the marked sum, but the
-QPE-based reflection scatters the signs instead of converting
-them into amplitude.}
+\caption{Output of the unmodified reference code on the toy
+instance. The marginal distribution on $S_1$ is identical to the
+initial Dicke state. The oracle correctly flips the phase of the
+marked sum, but the QPE-based reflection scatters the signs
+instead of converting them into amplitude. The qubit count is the
+one observed in our simulation; the paper does not report a
+configuration this small.}
 \label{tab:baseline}
 \end{table}
 
-The fact that the oracle flipped the right phase but the
-distribution remained flat raised three independent suspicions
-that we explored in the following weeks: a possible bug in the
-walk reflections, a possible bug in the cleanup of the ancillary
-registers, and a possible structural mismatch between the
-algorithmic regime and the toy instance we had chosen.
+Both compilation and simulation terminate without errors, so the
+problem is not a low-level implementation bug. The five
+modifications described in Section~\ref{sec:work} were the
+sequence of attempts to localise where the amplification fails to
+occur, and the underlying reason is discussed in
+Section~\ref{sec:work} once the modifications have been
+introduced.
 
 % =====================================================================
-\section{What we did to the code}
+\section{Modifications applied to the code}
 \label{sec:work}
 % =====================================================================
 
-This section is a condensed version of
-\texttt{documentation/modification\_report/modification\_report.tex},
-which contains the full diff-level chronology. We collected the
-work in five modifications, applied between mid-March and
-mid-April 2026 and validated against the simulation logs in
-\texttt{documentation/quantum\_simulation/} (files 01--13). The
-modifications were also discussed with one of the paper authors,
-who clarified the intended behaviour of the most ambiguous
-sub-routines and confirmed which of our patches were genuine
-fixes; we do not report the content of that exchange here.
+The modifications below are reported in chronological order.
+Every entry contains the rationale of the fix, the relevant
+extract of the diff and the final measurement obtained after
+applying the modification on top of the previous one. All runs
+use the same toy instance $J(3,1)$ with target $p=3$, so that
+the gate counts and the output distributions are directly
+comparable. The full simulation logs are stored under
+\texttt{documentation/quantum\_simulation/} (files 01--13) and
+the corresponding commits are visible in the repository history.
 
-\subsection{Modification 1 — Symmetric Reflection A and B on the
-full coin}
+\subsection*{Modification 1 --- Symmetric reflections A and B
+on the full coin (17 March 2026)}
 
-The MNRS walk operator decomposes as a double reflection in which
-the inner reflection $R_0 = 2|0\rangle\langle 0|-I$ acts on the
-\emph{whole} coin register $\omega = (\omega_1,\omega_0)$ of $n$
-qubits. In the original code the two reflections were asymmetric:
-Reflection~A controlled the $Z$ flip on $\omega_1$ only ($k$
-qubits), and Reflection~B did the analogous thing on $\omega_0$,
-with a typo on the loop bound of one of the $X$-sandwiches. The
-fix promotes both reflections to a multi-controlled $Z$ on the
-full $n$-qubit coin.
+The walk operator decomposes as $U_W =
+U_{\mathrm{ref}}(a_{v_j}) U_{\mathrm{ref}}(a_{v_i})$, with each
+$U_{\mathrm{ref}}(a_v) = U_U R_0 U_U^{\dagger}$ and
+$R_0 = 2|0\rangle\langle 0| - I$ acting on the \emph{whole} coin
+register $\omega = (\omega_1,\omega_0)$ of $n$ qubits. In the
+original code both reflections were implemented asymmetrically:
+Reflection~A controlled the phase flip only on
+\texttt{wstate\_ones} via \texttt{Z.ctrl(k)}, and Reflection~B
+did the analogous thing on \texttt{wstate\_zeros} only, with a
+typo on the loop bound of one of the $X$-sandwiches. The fix
+promotes both reflections to a multi-controlled $Z$ on the full
+$n$-qubit coin and aligns the loop bounds.
 
-\noindent\textbf{Effect.} Gate count rises from $2547$ to $2581$,
-qubit count unchanged ($28$). The marginal distribution on the
-toy instance is still flat.\\
-\noindent\textbf{Verdict.} Genuine bug. Necessary for the
-implementation to match the algorithm described in the paper.
+\begin{lstlisting}[language=Python]
+# --- Before (Reflection B) ---
+for j in range(n - k):
+    prw.apply(X, wstate_zeros[j])
+prw.apply(Z.ctrl(n - k), qpe_s[qw_iter], wstate_zeros)
+for j in range(k):                          # BUG: should be range(n-k)
+    prw.apply(X, wstate_zeros[j])
 
-\subsection{Modification 2 — Removal of the $\alpha/\omega$
-cleanup block}
+# --- After (17 March 2026) ---
+for j in range(k):     prw.apply(X, wstate_ones[j])
+for j in range(n - k): prw.apply(X, wstate_zeros[j])
+prw.apply(Z.ctrl(n), qpe_s[qw_iter],
+          wstate_ones, wstate_zeros)        # control on the full coin
+for j in range(k):     prw.apply(X, wstate_ones[j])
+for j in range(n - k): prw.apply(X, wstate_zeros[j])
+\end{lstlisting}
 
-Inside the QPE block, after the $\ell_s$ controlled walk steps,
-the original code performed a manual ``cleanup'' of the ancillary
-registers $\alpha$ and $\omega$ by re-applying
-\texttt{copy\_register} and \texttt{generate}. At that point in
-the circuit those registers are not in $|0\rangle$: they are
-entangled with the visited vertices. Re-applying \texttt{generate}
-to a non-zero state corrupts the entanglement instead of
+\begin{lstlisting}[style=plain]
+n=3, k=1, values=[1,2,3], target=3
+{'nbqbits': 28, 'gate_size': 2581}
+0.33333  |1>     0.33333  |2>     0.33333  |3>
+\end{lstlisting}
+
+This is a genuine bug: the original code does not implement the
+double reflection of the paper. The output distribution, however,
+is still flat: the fix is necessary for correctness, but on this
+toy instance it is not the cause of the missing amplification.
+
+\subsection*{Modification 2 --- Removal of the
+$\alpha/\omega$ cleanup block (20--23 March 2026)}
+
+Inside the \texttt{compute()} block of the QPE, after the
+$\ell_s$ controlled walk steps, the original code performed a
+manual ``cleanup'' of the ancillary registers $\alpha$ and
+$\omega$ via \texttt{copy\_register(m).ctrl()} gates followed by
+\texttt{generate(...)}. At that point those registers are not in
+$|0\rangle$: they are entangled with the visited vertices.
+Re-applying \texttt{generate} to a non-zero state acts as a
+non-trivial unitary that corrupts the entanglement instead of
 restoring it. The correct uncomputation is already provided by
 \texttt{prw.uncompute()} at the end of the \texttt{compute()}
-block. We therefore removed the manual cleanup.
+block (the standard AQASM compute/uncompute mechanism), so the
+manual cleanup is both redundant and destructive.
 
-\noindent\textbf{Effect.} Gate count drops from $2547$ to $1359$
-($-47\%$), qubit count unchanged. Distribution still flat.\\
-\noindent\textbf{Verdict.} Genuine bug. The cleanup was both
-redundant and destructive on instances with a non-trivial
-amplification window. A more refined per-element reset would be
-preferable but lies outside the scope of our patches.
+\begin{lstlisting}[language=Python]
+# --- Before ---
+for j in range(k):
+    prw.apply(qregs_init.copy_register(m).ctrl(),
+              wstate_ones[j], node_s_ones[j], alpha_ones)
+for j in range(n - k):
+    prw.apply(qregs_init.copy_register(m).ctrl(),
+              wstate_zeros[j], node_s_zeros[j], alpha_zeros)
+prw.apply(generate(k, 1),     wstate_ones)
+prw.apply(generate(n - k, 1), wstate_zeros)
 
-\subsection{Modification 3 — Use \texttt{insert\_lw} instead of
-\texttt{insert\_ld}}
+# --- After (20--23 March 2026) ---
+# Block removed: uncomputation handled by prw.uncompute().
+\end{lstlisting}
 
-The \texttt{delete} routine in
-\texttt{sliding\_sort\_array.py} internally called
-\texttt{insert\_ld(...).dag()}. A reversibility check showed that
-\texttt{insert\_ld} is not properly reversible: composing
-\texttt{delete} with \texttt{insert\_ld} on a small input does
-not give the identity, because of garbage left in the ancillas (a
-comment in the source already flagged the routine as such). Since
-the walk operator chains many \texttt{insert}/\texttt{delete}
-calls, the garbage propagates and degrades the QPE step. The fix
-routes \texttt{delete} through \texttt{insert\_lw(...).dag()},
-which passes the reversibility check.
+\begin{lstlisting}[style=plain]
+{'nbqbits': 28, 'gate_size': 1359}     # -47% gates
+0.33333  |1>     0.33333  |2>     0.33333  |3>
+\end{lstlisting}
 
-\noindent\textbf{Effect.} Gate count $1359 \to 1366$ (negligible),
-distribution still flat.\\
-\noindent\textbf{Verdict.} Structural fix. Without it the walk
-operator is not unitary on the ancillary subspace.
+The gate count drops by about $47\%$, confirming that the cleanup
+block was redundant. A surgical per-element reset of $\alpha$ and
+$\omega$ that does not touch the entangled state would be
+preferable to a global removal, but its design lies outside the
+scope of these patches and was therefore not pursued. The output
+distribution stays the same.
 
-\subsection{Modification 4 — Clamp $\delta\le 1$ and force
-$\ell_s\ge 3$}
+\subsection*{Modification 3 --- Use of \texttt{insert\_lw}
+instead of \texttt{insert\_ld} (22 March 2026)}
 
-The closed-form gap $\delta = n/(k(n-k))$ is derived under the
-hypothesis $k(n-k)\ge n$. On $(n,k)=(3,1)$ it returns $\delta=1.5$,
-a numerical artifact (a true spectral gap of a stochastic matrix
-lies in $(0,1]$). Plugging this into the precision formula gives
-$\ell_s=1$, which makes the QPE register degenerate. We clamp
-$\delta$ to $1$ and force $\ell_s$ to a minimum value, so that
-the QPE block is at least well-defined on small instances.
+The paper presents two implementations of the update operator: a
+\emph{low-width} variant that uses fewer ancillas and is
+sequential, and a \emph{low-depth} variant that is parallel and
+needs extra ancillas. In the reference code the \texttt{delete}
+routine of \texttt{sliding\_sort\_array.py} was internally
+calling \texttt{insert\_ld(...).dag()}. A reversibility check
+showed that the composition \texttt{delete} $\circ$
+\texttt{insert\_ld} is not the identity on a small input,
+because of garbage left in the ancillas (a comment in the source
+already flagged \texttt{insert\_ld} as ``not properly
+reversible''). Since the walk operator chains many
+\texttt{insert}/\texttt{delete} calls, the garbage propagates and
+degrades the QPE step. The fix routes \texttt{delete} through
+\texttt{insert\_lw(...).dag()}, which passes the reversibility
+check.
 
-\noindent\textbf{Effect.} Qubit count rises from $28$ to $30$;
-gate count unchanged; distribution still flat.\\
-\noindent\textbf{Verdict.} Defensive patch, not an algorithmic
-fix. It cannot create a spectral gap that the graph does not
-have. On graphs with $\delta<1$ it never triggers, so it is fully
-backward compatible.
+\begin{lstlisting}[language=Python]
+# --- After (22 March 2026) ---
+from .sliding_sort_array import insert_lw, insert_ld
+insert = insert_lw if low_width else insert_ld    # reversible default
+# delete() in sliding_sort_array.py now calls insert_lw(...).dag()
+\end{lstlisting}
 
-\subsection{Modification 5 — Diagnostic checkpoints}
+\begin{lstlisting}[style=plain]
+{'nbqbits': 28, 'gate_size': 1366}
+0.33333  |1>     0.33333  |2>     0.33333  |3>
+\end{lstlisting}
 
-The instrumented copy \texttt{cssp\_with\_checkpoint.py}
-simulates the full state at six points of the circuit and prints,
-for each state with non-negligible probability, the amplitude and
-the value of every named register. It is not an algorithmic
-change, but it was decisive: it pinpointed that the oracle is
-correct (phase flip at Checkpoint~3) and that the failure sits
-inside the QPE-based reflection, between Checkpoints~3 and~5.
+This is a structural fix: the walk operator was not unitary on
+the ancillary subspace before the change. The output distribution
+is again unchanged on the toy instance.
 
-\noindent\textbf{Effect.} No change in the circuit, but empirical
-confirmation that the bugs in Modifications~1--3 are not the only
-reason for the flat output.\\
-\noindent\textbf{Verdict.} Indispensable observability tool;
-without it, the diagnosis ``the regime is wrong, not only the
-code'' would have remained a conjecture.
+\subsection*{Modification 4 --- Clamping the spectral gap and
+forcing a minimum QPE precision (27 March 2026)}
 
-\subsection{Summary table}
+The closed-form formula $\delta = n/(k(n-k))$ is derived under
+the implicit assumption $k(n-k) \ge n$. For $(n,k)=(3,1)$ it
+returns $\delta=1.5$, which is a numerical artifact: a genuine
+spectral gap of a reversible walk lies in $(0,1]$, and a value
+greater than one signals that the formula is being applied
+outside its intended regime. Plugging this back into the
+precision requirement
+$\ell_s = \lceil \log_2 (\pi/(2\sqrt{\delta})) \rceil$ gives
+$\ell_s = 1$: a single QPE qubit can only distinguish phase $0$
+from phase $\pi$, which is not enough to tell $|E\rangle$ apart
+from any other eigenstate of $U_W$. As a defensive patch, $\delta$
+is clamped to $1$ and $\ell_s$ is forced to at least three
+qubits.
+
+\begin{lstlisting}[language=Python]
+# --- After (27 March 2026) ---
+delta  = min(n / (k * (n - k)), 1.0)
+len_s  = max(int(np.ceil(np.log2(np.pi / (2 * np.sqrt(delta))))), 3)
+\end{lstlisting}
+
+\begin{lstlisting}[style=plain]
+{'nbqbits': 28 -> 30, 'gate_size': 1366}
+0.33333  |1>     0.33333  |2>     0.33333  |3>
+\end{lstlisting}
+
+The clamp does not create a spectral gap that the graph does not
+have: it only ensures that the QPE block is well-defined.
+Instances with $\delta < 1$ are unaffected, so the patch is
+backward-compatible.
+
+\subsection*{Modification 5 --- Diagnostic checkpoints
+(17 April 2026)}
+
+To localise where the amplification is being lost, an
+instrumented copy \texttt{cssp\_with\_checkpoint.py} was written.
+It simulates the full state at six key points of one MNRS
+iteration (Dicke + VBE, edge superposition, post-oracle, post-QPE,
+post-diffusion, end of iteration) and prints, for each state with
+$p > 5 \cdot 10^{-4}$, the probability and the complex amplitude,
+parsed into the named registers (Dicke, $S_1$, $S_0$, $T$,
+$\alpha$, $\omega$, QPE, Sum).
+
+\begin{lstlisting}[style=plain]
+Ckpt 3 (Post-Oracle):
+  Prob 0.0833 | Ampl +0.2887 | S_1:0 | Sum:2     (non-marked)
+  Prob 0.0833 | Ampl -0.2887 | S_1:1 | Sum:3     (marked: phase flip OK)
+
+Ckpt 5 (Post-Diffusion):
+  Prob 0.0417 | Ampl +/-0.2041 | scattered signs
+  (no concentration on Sum:3)
+\end{lstlisting}
+
+The trace shows two facts that are not visible from the final
+measurement alone. First, the oracle is correct: at Checkpoint~3
+the marked states have amplitude $-0.289$ and the non-marked
+states have $+0.289$. Second, the failure sits inside the
+QPE-based reflection: between Checkpoint~3 and Checkpoint~5 the
+signs become evenly mixed, so the block that should rotate them
+into amplitude is acting as a sign-scrambler instead. This
+empirical fingerprint is the diagnostic of a QPE run with
+$\ell_s$ too small to resolve the eigenphase of $|E\rangle$ from
+the other eigenphases of $U_W$.
+
+\subsection{Why the output remains flat after the fixes}
+
+After Modifications 1--5 the marginal distribution on $S_1$ is
+still $(\tfrac13,\tfrac13,\tfrac13)$. The reason is not a single
+local bug, but a structural mismatch between the regime in which
+MNRS delivers a quadratic speed-up and the toy instances that
+are small enough to be simulated. On $J(3,1) \equiv K_3$ the
+walker mixes in one classical step and the walk operator has
+only three eigenphases; the value of $\delta$ obtained from the
+formula introduced in Modification~4 falls outside the range of
+a true spectral gap, and the precision $\ell_s$ collapses to a
+single qubit, which is not enough to implement the approximate
+reflection. On $J(4,2)$ the gap is exactly $\delta = 1$, again a
+borderline case with no separation to exploit and a circuit that
+already crosses the practical qubit ceiling of \texttt{PyLinalg}.
+Genuine MNRS instances such as $(5,2)$, $(6,2)$, $(6,3)$ have
+$\delta < 1$ and the algorithm should amplify the solution, but
+the qubit count grows like $\Theta(n \log n)$ and quickly exceeds
+the size of the simulator.
 
 \begin{table}[H]
 \centering
@@ -374,12 +520,12 @@ code'' would have remained a conjecture.
 1 & 17 Mar & Genuine bug fix & $2547 \to 2581$ & flat \\
 2 & 20 Mar & Genuine bug fix & $2547 \to 1359$ ($-47\%$) & flat \\
 3 & 22 Mar & Structural fix  & $1359 \to 1366$ & flat \\
-4 & 27 Mar & Defensive patch & $1366$ ($28\to30$ qubits) & flat \\
+4 & 27 Mar & Defensive patch & $1366$ ($28 \to 30$ qubits) & flat \\
 5 & 17 Apr & Diagnostic tool & no change & flat (now understood) \\
 \bottomrule
 \end{tabular}
-\caption{Chronology of the modifications applied to
-\texttt{cssp.py}.}
+\caption{The five modifications, in chronological order, with the
+measured effect on the toy instance $J(3,1)$.}
 \label{tab:mods}
 \end{table}
 
@@ -388,12 +534,14 @@ code'' would have remained a conjecture.
 \label{sec:compare}
 % =====================================================================
 
-To put the reproducibility difficulties of Lancellotti et al.\ in
-perspective, we surveyed seven related works stored in
+To contextualise the reproduction difficulties, seven related
+works were surveyed in
 \texttt{documentation/paper\_comparison/}. The selection covers
 two quantum algorithms for SSP-like problems, three quantum-walk
-papers on graphs other than Johnson, and two papers on
-Grover-style search. Table~\ref{tab:papers} summarises them.
+papers on graphs other than the Johnson graph, and two papers on
+Grover-style search. Table~\ref{tab:papers} summarises them and
+records, for each one, why the proposed algorithm is amenable to
+end-to-end simulation while the one in our paper is not.
 
 \begin{table}[H]
 \centering
@@ -405,287 +553,253 @@ Grover-style search. Table~\ref{tab:papers} summarises them.
 \toprule
 \textbf{Reference} & \textbf{Algorithm} &
 \textbf{Instance simulated} & \textbf{Validation platform} &
-\textbf{Why it can be simulated end-to-end}\\
+\textbf{Reason it can be simulated}\\
 \midrule
 Zheng et al., 2022
 (\texttt{s11432-021-3334-1})
 & QPE + Amplitude Amplification for SSP
 & $|S|{=}4$, $w{=}12$, $10$ qubits
 & Qiskit + IBM Q hardware
-& No quantum walk; oracle marks the sum directly without a
-Johnson graph.\\
+& No quantum walk: the oracle marks the sum directly, so there
+is no spectral-gap dependence and no QPE precision constraint.\\
 \midrule
 Sato et al., 2024
 (\texttt{2405.07129v3})
 & Two-step Grover for TSP, HOBO encoding
 & $n{=}3,4$ cities, $6$/$12$ qubits
 & Qiskit Aer
-& Compact encoding; no walk and no spectral-gap dependency.\\
+& Compact encoding, no walk, the diffusion is the standard
+Grover one.\\
 \midrule
 Perriello et al., 2021
 (\texttt{ISD.pdf})
 & Grover for ISD on Prange formulation
 & crypto sizes ($\sim 2^{32}$ qubits)
-& Atos QLM, sub-component validation
-& Explicitly admits no end-to-end simulation; only resource
-estimates.\\
+& Atos QLM, sub-component validation only
+& No end-to-end simulation: the paper publishes resource
+estimates, not measured probabilities.\\
 \midrule
 Razzoli et al., 2024
 (\texttt{entropy-26-00313})
-& DTQW on $2^n$-cycles, no marking
+& Discrete-time walk on cycles, no marking
 & $N=4,8$, hardware run
 & IBM \textsf{ibm\_cairo} (27 qubits)
-& No oracle, no reflection, just walk dynamics.\\
+& Free walk, no oracle and no reflection: nothing depends on the
+spectral gap.\\
 \midrule
 da Silva et al., 2024
 (\texttt{entropy-26-00668})
-& Grover on a database of $16$ colours
+& Standard Grover on a database of $16$ colours
 & $5$ qubits
 & PyLinalg + NoisyQProc
-& Standard Grover on $N=16$, well inside the regime
-$1/\sqrt N$.\\
+& $N=16$, well inside the regime where $\sqrt{N}$ iterations
+remain few.\\
 \midrule
 Portugal \& Moqadam, 2025
 (\texttt{entropy-27-00454-v2})
-& CTQW search on $K_N$, $K_{n,n}$, $Q_n$
+& Continuous-time walk on $K_N$, $K_{n,n}$, $Q_n$
 & $K_8$, $K_{32,32}$, $Q_{10}$
 & Qiskit + Hiperwalk
 & Highly symmetric graphs whose spectrum is known in closed
-form.\\
+form; no QPE.\\
 \midrule
 Wing-Bocanegra et al., 2025
 (\texttt{s41598-025-87304-0})
-& Single-step DTQW on $K_{2^n}$ for QAOA initialisation
+& Single-step walk on $K_{2^n}$ for QAOA initialisation
 & $K_4$ to $K_{64}$
 & Qiskit + IBM \textsf{ibmq\_manila}
-& A single walk step removes the iteration-tuning problem and
-the spectral-gap dependence.\\
+& A single walk step removes both the iteration tuning and the
+spectral-gap dependence.\\
 \bottomrule
 \end{tabular}
-\caption{Related quantum-search papers. None of them implements
-the MNRS framework on a Johnson graph at the scale targeted by
-Lancellotti et al.; all of them succeed in simulation by avoiding
-the specific obstacle that defeats the toy-instance simulation
-of CSSP.}
+\caption{Related quantum-search papers and the reason each one
+can be simulated end-to-end.}
 \label{tab:papers}
 \end{table}
 
-\subsection{Why their work can be simulated and ours cannot}
+\subsection{The common pattern}
 
-Reading the seven papers in parallel, a clear pattern emerges:
-each work that successfully validates a quantum algorithm in
-simulation does so by sidestepping the precise constraint that
-breaks our toy run. We can group the workarounds in three
-families.
+Reading the seven papers together, a clear pattern emerges: each
+work that successfully validates its algorithm in simulation does
+so by avoiding one of the three ingredients that, taken together,
+make the simulation of our paper unfeasible. Some works
+\emph{drop the walk altogether} and use a direct oracle followed
+by amplitude amplification (Zheng et al., Sato et al., da Silva
+et al.); others \emph{keep the walk but pick easy graphs} whose
+spectrum is trivial or known in closed form, and either skip the
+reflection or use a single walk step (Razzoli et al., Portugal
+\& Moqadam, Wing-Bocanegra et al.); the only paper that targets a
+genuinely hard problem at cryptographic scale (Perriello et al.)
+follows the same path as Lancellotti et al.\ and \emph{gives up
+on end-to-end simulation}, publishing resource estimates instead.
 
-\paragraph{Family A — replace MNRS with a different algorithm.}
-Zheng et al.\ tackle SSP itself, but with QPE followed by
-Amplitude Amplification on a direct sum oracle, with no Johnson
-graph and no walk. Sato et al.\ adopt a similar philosophy on
-TSP. Removing the walk also removes the spectral-gap dependence
-and the QPE precision requirement, which makes the small-scale
-simulation feasible. The cost is methodological: one loses the
-Markov-chain interpretation and the asymptotic complexity becomes
-the standard Grover bound, not the walk speed-up.
-
-\paragraph{Family B — keep the walk, but pick easy graphs or
-skip the reflection.} Razzoli et al., Portugal \& Moqadam and
-Wing-Bocanegra all run quantum walks in simulation, but on
-graphs whose spectrum is either trivial ($K_N$, $K_{n,n}$ have
-two-eigenvalue spectra), available in closed form (cycles), or
-sidestepped by running a single step. None of them uses a
-Johnson graph $J(n,k)$ with $k\ge 2$, where the spectrum has
-$k+1$ distinct eigenvalues whose ratios depend on $n,k$ in a
-non-trivial way. Equally important, none of them uses an MNRS
-\emph{approximate reflection} via QPE: they either use no
-reflection at all, or implement a direct Grover-style
-reflection.
-
-\paragraph{Family C — give up on end-to-end simulation.}
-Perriello et al.\ are the most candid: working on Information
-Set Decoding at cryptographic sizes, they explicitly state that
-end-to-end simulation is impossible and only validate the
-sub-components. Their numbers are resource estimates, not
-measured probabilities. This is methodologically the same
-trajectory taken by Lancellotti et al.: validate the building
-blocks separately, present analytical complexity figures, and
-renounce the end-to-end output distribution.
-
-\subsection{The key computational difference}
+\subsection{Why the paper we studied is harder to simulate}
 
 The pieces of the MNRS pipeline that make it powerful at
 cryptographic scale --- the Johnson graph encoding, the
-approximate reflection via QPE, the spectral-gap dependence ---
-are precisely the pieces that make it impossible to validate at
-toy scale. The other works either remove one of these pieces or
-operate at a scale at which the simulator can still keep up.
-The combination ``MNRS + Johnson graph + small instance +
-classical simulation + amplitude check'' is, to the best of our
-literature survey, an empty intersection. Our finding that the
-toy run on $J(3,1)$ produces a flat distribution is therefore
-consistent with the literature, not anomalous.
+approximate reflection via QPE, the dependence on a small
+spectral gap --- are precisely the pieces that prevent its
+validation on a toy instance. They interact through three
+quantitative constraints:
+\begin{itemize}[leftmargin=1.2em]
+\item the qubit count grows as $\Theta(n \log n)$, so the
+smallest instance reported in the paper itself
+(see Section~\ref{sec:paper}) already crosses the practical
+ceiling of a state-vector simulator;
+\item the spectral gap $\delta$ is greater than $1$ for the
+small instances accessible to a simulator, which collapses the
+speed-up factor $1/\sqrt{\delta}$ to a constant;
+\item the QPE precision $\ell_s$ derived from the same formula
+becomes too small to resolve the eigenphase of $|E\rangle$ from
+the other eigenphases of $U_W$.
+\end{itemize}
+The other works either remove one of these constraints (no walk,
+no QPE, no spectral-gap dependence) or operate at a scale at
+which the simulator can still keep up. To the best of the
+present literature survey, no published work covers the
+combination ``MNRS + Johnson graph + small instance + classical
+simulation + amplitude check''. The flat distribution observed
+on $J(3,1)$ is therefore consistent with the literature, not
+anomalous.
 
 % =====================================================================
-\section{Analysis based on the code-and-test mapping}
+\section{Code-and-test mapping analysis}
 \label{sec:mapping}
 % =====================================================================
 
-\subsection{What the mapping was for}
+\subsection{Method}
 
-In parallel with the modifications, we built a structured
-comparison between the paper and the implementation, stored as
-\texttt{documentation/Code and test mapping.pptx}. The mapping
-goes through every algorithmic block described in the paper
-(Dicke preparation, vertex binary encoding, update operator,
-oracle, QPE-based reflection, diffusion, output measurement) and
-locates the corresponding sub-routine and tests in the code. For
-each block we then asked three questions:
-\begin{enumerate}[leftmargin=1.4em]
-\item Does the implementation behave as the paper describes, on
-inputs we can simulate?
-\item Are the tests in the repository sufficient to validate this
-behaviour?
-\item Does the documentation make it easy for a new reader to
-match the code with the paper?
-\end{enumerate}
+In parallel with the modifications, a structured comparison
+between the paper and the implementation was carried out and is
+recorded in \texttt{documentation/Code and test mapping.pptx}.
+The mapping walks through every algorithmic block described in
+the paper --- input preparation (Dicke state, vertex binary
+encoding), update operator, marking oracle, QPE-based reflection,
+diffusion, output measurement --- and locates the corresponding
+sub-routine and tests in the code. For each block three questions
+were asked: whether the implementation behaves as the paper
+describes on inputs that we can simulate; whether the existing
+tests in the repository are sufficient to validate that
+behaviour; and whether the documentation makes it easy for a new
+reader to match the code with the paper. The output of the
+mapping is a list of items that were brought to the attention of
+the corresponding author and, after agreement on which of them
+were genuine issues, condensed into a single upstream pull
+request. The remainder of this section reports the findings in
+two groups: those that have been addressed and those that remain
+open.
 
-The mapping turned out to be the most useful artefact for the
-project: it organised the discussion with the corresponding
-author and produced the short list of items that we then took to
-the upstream pull request.
+\subsection{Critical points that have been addressed}
 
-\subsection{Critical points that we resolved}
+The following items were submitted to the upstream repository
+\texttt{paper-codes/2025-TC} as pull request~\#1 (branch
+\texttt{correctness/mod1-mod4}) and are awaiting merge at the
+time of writing.
 
-The following items came out of the mapping, were agreed with the
-corresponding author, and were addressed by the pull request that
-we opened against the paper's repository.
+\paragraph{Asymmetric reflections inside the QPE block.}
+Both Reflection~A and Reflection~B now control the phase flip on
+the full coin register of $n$ qubits, with the corresponding
+$X$-sandwich applied symmetrically to both halves. This is the
+content of Modification~1 of Section~\ref{sec:work}.
 
-\begin{itemize}[leftmargin=1.2em]
-\item \textbf{Asymmetric reflections (Modification~1).} Both
-reflections inside the QPE block now control the $Z$ flip on the
-full coin register, with the correct $X$-sandwich on both halves.
-\item \textbf{Degenerate QPE register on small instances
-(Modification~4).} The lower bound on $\ell_s$ has been raised so
-that the QPE register is never trivial; the change is invisible
-on instances where the original formula already returned a
-sensible value.
-\item \textbf{Documentation gap.} The original \texttt{README}
-made it difficult for a new reader to understand the entry point
-of the code, the meaning of the command-line flags, and the
-assumed installation. We rewrote it with a citation to the
-paper, an explicit list of requirements, and a usage block that
-matches the actual CLI of \texttt{cssp.py}.
-\end{itemize}
+\paragraph{Degenerate QPE register on small instances.}
+The lower bound on $\ell_s$ has been raised so that the QPE
+register is never trivial; the change is invisible on instances
+where the original formula already returned a value above the
+new floor, and it is therefore fully backward-compatible. This
+is the content of Modification~4.
+
+\paragraph{Documentation gap between paper and code.}
+The original \texttt{README} of the repository did not cite the
+paper, did not list the dependencies and did not describe the
+command-line interface of \texttt{cssp.py}. It was rewritten with
+a citation to the IEEE TC paper, an explicit list of
+requirements (\texttt{myQLM}, \texttt{qat-utils}) and a usage
+block that matches the actual flags accepted by the script.
 
 \subsection{Critical points that remain open}
 
-A second set of items emerged from the mapping but lies outside
-the scope of a small, targeted pull request. We list them here
-for completeness, since they would be the natural follow-ups of
-this project.
+A second group of items emerged from the mapping but lies outside
+the scope of a small, targeted pull request. They are listed
+here for completeness, since they are the natural next steps of
+the project.
 
-\begin{itemize}[leftmargin=1.2em]
-\item \textbf{End-to-end validation is structurally impossible
-on a state-vector simulator.} Already $J(4,2)$ requires more than
-$30$ qubits and exceeds the practical ceiling of \texttt{PyLinalg}
-on commodity hardware. As discussed in Section~\ref{sec:compare},
-this is not a code defect but a property of the algorithmic
-regime targeted by the paper.
-\item \textbf{Per-element reset of the cleanup ancillas.} The
-removal of the destructive cleanup block (Modification~2) is a
-local mitigation: a proper reset of the $\alpha/\omega$ registers
-that does not touch the entangled state would require a different
-construction, beyond the scope of the present pull request.
-\item \textbf{Test coverage of the composite walk operator.} The
-existing tests cover the building blocks (insert, delete, oracle,
-Dicke preparation) in isolation, but no test exercises the full
-walk operator $U_W$ as a single unit on a small Johnson graph.
-The bugs identified in Modifications~1 and~3 would have been
-caught earlier by such a test.
-\item \textbf{Mapping of paper symbols to code identifiers.} The
-register names in the code do not always match the symbols used
-in the paper (for instance the role of $\alpha_0$ versus
-$\alpha_1$, or of the two halves of the coin). A short
-correspondence table in the repository would significantly
-shorten the on-boarding time.
-\end{itemize}
+\paragraph{End-to-end validation is structurally infeasible on a
+state-vector simulator.}
+As recalled in Section~\ref{sec:paper}, even the smallest
+instance reported in the paper exceeds the practical ceiling of
+\texttt{PyLinalg} on commodity hardware. This is not a defect of
+the code but a property of the algorithmic regime targeted by
+the paper.
+
+\paragraph{Surgical reset of the cleanup ancillas.}
+The removal of the destructive cleanup block (Modification~2) is
+a local mitigation: a per-element reset of $\alpha$ and $\omega$
+that does not touch the entangled state would be the proper fix,
+but it requires a different construction and was therefore not
+included in the current pull request.
+
+\paragraph{Test coverage of the composite walk operator.}
+The existing tests cover the building blocks
+(\texttt{insert}, \texttt{delete}, oracle, Dicke preparation) in
+isolation, but there is no test that exercises the full walk
+operator $U_W$ as a single unit on a small Johnson graph. The
+bugs identified in Modifications~1 and~3 would have been caught
+earlier by such a test.
+
+\paragraph{Mapping of paper symbols to code identifiers.}
+The register names in the code do not always match the symbols
+used in the paper (for example the role of $\alpha_0$ versus
+$\alpha_1$, or the two halves of the coin). A short
+correspondence table inside the repository would significantly
+shorten the on-boarding time of any future contributor.
 
 % =====================================================================
 \section{Conclusions}
 \label{sec:concl}
 % =====================================================================
 
-\subsection{What was accomplished}
+The project began as an attempt to reproduce the results of the
+paper \emph{``Solving the Subset Sum Problem via Quantum Walk
+Search''} on a small instance and turned, after the unexpected
+flat output, into a structured diagnosis of the reasons behind
+that behaviour. The diagnosis showed that the reference code
+contained two genuine bugs (the asymmetric reflections inside the
+QPE block, and a destructive cleanup of the ancillary registers)
+together with one structural issue (a non-reversible variant of
+the update operator) and that none of these bugs is responsible
+for the flat output on $J(3,1)$: even with all the fixes applied,
+the toy instance lies outside the regime in which MNRS delivers
+its quadratic speed-up. The literature survey confirmed that no
+related work succeeds in simulating an MNRS walk on a Johnson
+graph end-to-end, and that the working alternatives correspond to
+relaxing one of the constitutive ingredients of the algorithm.
 
-The project produced four concrete outcomes:
-\begin{enumerate}[leftmargin=1.4em]
-\item A patched local copy of \texttt{cssp.py} in
-\texttt{code\_updated/}, with the four fixes and the diagnostic
-checkpoints.
-\item A modification report
-(\texttt{documentation/modification\_report/modification\_report.tex})
-that documents the chronology and the reasoning behind every
-change.
-\item A code-and-test mapping
-(\texttt{documentation/Code and test mapping.pptx}) that aligns
-each algorithmic block of the paper with the corresponding
-sub-routine in the code, and that produced the list of agreed
-fixes.
-\item A pull request to the upstream repository
-\texttt{paper-codes/2025-TC} (PR \#1, branch
-\texttt{correctness/mod1-mod4}), containing the symmetric
-reflections, the lower bound on $\ell_s$, and the rewritten
-\texttt{README}. At the time of writing, the pull request is
+The agreed correctness fixes were submitted to the upstream
+repository \texttt{paper-codes/2025-TC} as pull request~\#1,
+which contains the symmetric reflections, the lower bound on
+$\ell_s$ and the rewritten \texttt{README}. The pull request is
 under review by the corresponding author and is awaiting merge.
-\end{enumerate}
+A patched local copy with all five modifications applied is
+available in \texttt{code\_updated/cssp.py}, and the full
+chronology of the changes is documented in
+\texttt{documentation/modification\_report/}.
 
-\subsection{Final remarks}
-
-The MNRS pipeline of Lancellotti et al.\ is algorithmically
-correct once the bugs identified in Modifications~1--3 are
-removed. It cannot, however, be executed in a meaningful way on
-the toy instances accessible to a state-vector simulator: on
-$J(3,1)$ the spectral gap is degenerate and the algorithm has no
-amplification window to exploit; on $J(4,2)$ and beyond the
-qubit count exceeds the simulator budget. The paper itself is
-explicit about this trade-off and targets cryptographic-scale
-instances on fault-tolerant hardware.
-
-The literature comparison confirms that this is a structural
-limitation of the family of algorithms, not an oversight of the
-authors: no surveyed work successfully simulates an MNRS walk on
-a Johnson graph end-to-end, and the working alternatives
-correspond to relaxing one of the constitutive ingredients
-(switching to direct Grover, choosing a graph with a trivial
-spectrum, or limiting validation to sub-components).
-
-For a future continuation of the project, the natural next step
-would be to follow Path~A from the modification report --- a
-direct Grover search on a compact vertex register --- and use it
-as a baseline against which the qualitative behaviour of a
-stripped-down MNRS variant can be compared. Until then, the
-contribution of this work is the diagnosis of the limits, the
-upstream fixes that bring the reference implementation closer to
-the paper, and the documentation needed for a new reader to pick
-it up where we left off.
+The natural continuation of the project would follow one of the
+two paths suggested by the literature comparison: either a direct
+Grover search on a compact vertex register, which validates the
+\emph{idea} of amplitude amplification on small instances at the
+cost of the walk speed-up; or a stripped-down MNRS variant on a
+single register and an exact reflection, which keeps the walk
+structure but is no longer a one-to-one reproduction of the
+paper. Either route would close the gap between the
+algorithmic regime targeted by the paper and the regime that a
+laptop simulator can reach, which delimits any future work on
+this codebase.
 
 \bigskip
 
 \noindent\textbf{Repository.}
 \url{https://github.com/jacopobellosi/Solving-the-Subset-Sum-Problem-via-Quantum-Walk-Search}
-
-\noindent\textbf{Companion documents.}
-\begin{itemize}[leftmargin=1.2em,nosep]
-\item \texttt{documentation/modification\_report/modification\_report.tex}
---- full chronology of the five modifications.
-\item \texttt{documentation/quantum\_simulation/01--13.txt}
---- per-modification simulation logs.
-\item \texttt{documentation/Code and test mapping.pptx}
---- structured comparison between paper and implementation.
-\item \texttt{documentation/paper\_comparison/}
---- PDFs of the seven surveyed related works.
-\item \texttt{code\_updated/cssp.py}
---- patched implementation with all the fixes applied.
-\end{itemize}
 
 \end{document}
