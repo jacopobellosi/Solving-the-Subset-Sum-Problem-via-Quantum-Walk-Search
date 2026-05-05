@@ -12,6 +12,7 @@
 \usepackage{booktabs}
 \usepackage{float}
 \usepackage{enumitem}
+\usepackage{pifont}
 
 \hypersetup{colorlinks=true, linkcolor=blue, urlcolor=blue, citecolor=blue}
 
@@ -206,11 +207,13 @@ and better T-depth for $n \gtrsim 2^{13}$; and reference
 open-source implementations in Qiskit and \texttt{myQLM}. It does
 not, however, run the algorithm end-to-end on any concrete
 instance: the cryptographic regime targeted by the paper is far
-above any classical state-vector simulator (Table III of the
-paper reports already 38 qubits for the smallest non-trivial
-instance $J(4,2)$ with $m=2$), and the algorithm is designed for
-fault-tolerant hardware. Validation is therefore restricted to
-the building blocks taken individually.
+above any classical state-vector simulator. The paper itself
+states that ``the smallest non-trivial case ($n=4$, $k=2$)
+already requires $38$ qubits, exceeding the practical limits of
+classical simulation'', with Table III tabulating resources for
+$n \in \{4,\dots,10\}$ and $k = \lfloor n/2 \rfloor$. The
+algorithm is designed for fault-tolerant hardware, so validation
+is restricted to the building blocks taken individually.
 
 \subsection{Running the code as-is on a toy instance}
 
@@ -272,9 +275,9 @@ Ckpt 6  End of iteration:
 instance. The marginal distribution on $S_1$ is identical to the
 initial Dicke state. The oracle correctly flips the phase of the
 marked sum, but the QPE-based reflection scatters the signs
-instead of converting them into amplitude. The qubit count is the
-one observed in our simulation; the paper does not report a
-configuration this small.}
+instead of converting them into amplitude. The instance $J(3,1)$
+sits below the range $n \ge 4$ tabulated in Table~III of the
+paper, so the qubit count of $28$ comes from our simulation.}
 \label{tab:baseline}
 \end{table}
 
@@ -297,19 +300,23 @@ extract of the diff and the final measurement obtained after
 applying the modification on top of the previous one. All runs
 use the same toy instance $J(3,1)$ with target $p=3$, so that
 the gate counts and the output distributions are directly
-comparable. The full simulation logs are stored under
-\texttt{documentation/quantum\_simulation/} (files 01--13) and
-the corresponding commits are visible in the repository history.
+comparable. The corresponding output logs of every run are
+preserved in the repository.
 
 \subsection*{Modification 1 --- Symmetric reflections A and B
 on the full coin (17 March 2026)}
+
+\emph{What this fix is about.} Inside one walk step, the algorithm
+reflects the state around $|0\dots 0\rangle$ on a coin register of
+$n$ qubits. In the reference code this reflection acted only on
+half of the coin at a time, which is a different operation and
+breaks the walk operator.
 
 The walk operator decomposes as $U_W =
 U_{\mathrm{ref}}(a_{v_j}) U_{\mathrm{ref}}(a_{v_i})$, with each
 $U_{\mathrm{ref}}(a_v) = U_U R_0 U_U^{\dagger}$ and
 $R_0 = 2|0\rangle\langle 0| - I$ acting on the \emph{whole} coin
-register $\omega = (\omega_1,\omega_0)$ of $n$ qubits. In the
-original code both reflections were implemented asymmetrically:
+register $\omega = (\omega_1,\omega_0)$. In the original code
 Reflection~A controlled the phase flip only on
 \texttt{wstate\_ones} via \texttt{Z.ctrl(k)}, and Reflection~B
 did the analogous thing on \texttt{wstate\_zeros} only, with a
@@ -348,10 +355,20 @@ toy instance it is not the cause of the missing amplification.
 \subsection*{Modification 2 --- Removal of the
 $\alpha/\omega$ cleanup block (20--23 March 2026)}
 
+\emph{What this fix is about.} The QPE block in the original
+code tried to manually reset two ancillary registers
+($\alpha$ and $\omega$, used during the walk steps) to zero
+before the final QFT. The reset routine is correct only if those
+registers are already in $|0\rangle$, but at that point in the
+circuit they are entangled with the visited vertices, so the
+manual reset corrupts the state instead of cleaning it. The
+correct uncomputation is automatic in \texttt{myQLM} and the
+manual block is therefore removed.
+
 Inside the \texttt{compute()} block of the QPE, after the
 $\ell_s$ controlled walk steps, the original code performed a
-manual ``cleanup'' of the ancillary registers $\alpha$ and
-$\omega$ via \texttt{copy\_register(m).ctrl()} gates followed by
+manual ``cleanup'' of $\alpha$ and $\omega$ via
+\texttt{copy\_register(m).ctrl()} gates followed by
 \texttt{generate(...)}. At that point those registers are not in
 $|0\rangle$: they are entangled with the visited vertices.
 Re-applying \texttt{generate} to a non-zero state acts as a
@@ -391,6 +408,13 @@ distribution stays the same.
 \subsection*{Modification 3 --- Use of \texttt{insert\_lw}
 instead of \texttt{insert\_ld} (22 March 2026)}
 
+\emph{What this fix is about.} The walk step inserts and deletes
+elements from a small sorted list. The library offered two
+versions of the routine, and the version selected by default
+left ``garbage'' bits in the workspace whenever \texttt{delete}
+was applied to its output. The fix swaps to the version that
+behaves as the inverse of \texttt{insert} on the same input.
+
 The paper presents two implementations of the update operator: a
 \emph{low-width} variant that uses fewer ancillas and is
 sequential, and a \emph{low-depth} variant that is parallel and
@@ -426,6 +450,14 @@ is again unchanged on the toy instance.
 \subsection*{Modification 4 --- Clamping the spectral gap and
 forcing a minimum QPE precision (27 March 2026)}
 
+\emph{What this fix is about.} The spectral gap $\delta$ controls
+how many QPE qubits the algorithm allocates. On instances small
+enough to be simulated, the closed-form formula returns a
+mathematically valid number that is, however, outside the range
+in which the formula is meant to be applied; this leaves the QPE
+register too small to do its job. The fix is a defensive clamp
+that keeps the block well-defined on those instances.
+
 The closed-form formula $\delta = n/(k(n-k))$ is derived under
 the implicit assumption $k(n-k) \ge n$. For $(n,k)=(3,1)$ it
 returns $\delta=1.5$, which is a numerical artifact: a genuine
@@ -458,6 +490,12 @@ backward-compatible.
 
 \subsection*{Modification 5 --- Diagnostic checkpoints
 (17 April 2026)}
+
+\emph{What this fix is about.} The first four modifications are
+real fixes, but they leave the output unchanged. To find out
+\emph{where} in the circuit the amplification is being lost, the
+algorithm is instrumented so that the full quantum state can be
+inspected at six key points of one MNRS iteration.
 
 To localise where the amplification is being lost, an
 instrumented copy \texttt{cssp\_with\_checkpoint.py} was written.
@@ -529,14 +567,49 @@ measured effect on the toy instance $J(3,1)$.}
 \label{tab:mods}
 \end{table}
 
+\subsection{Outcome of the discussion with the paper authors}
+
+The five modifications above were brought to the attention of one
+of the paper authors. The exchange clarified the status of each
+item without entering into specific implementation details, and
+produced the following outcome.
+\begin{itemize}[leftmargin=1.2em]
+\item \textbf{Modification~1} (asymmetric reflections) and
+\textbf{Modification~4} (lower bound on $\ell_s$) were confirmed
+as real issues and were therefore included in the upstream
+repository.
+\item The \textbf{rewritten \texttt{README}}, prompted by the
+documentation gap noticed during the mapping, was likewise
+agreed and merged.
+\item \textbf{Modification~2} (cleanup block) was confirmed
+problematic as a global removal, but the proper resolution
+requires a different construction (a per-element reset that does
+not touch the entangled state); this falls outside the scope of
+a small correctness pull request and was therefore kept as a
+local mitigation only.
+\item \textbf{Modification~3} (low-width vs.~low-depth update
+operator) is not a defect of the upstream code: the choice of
+variant is a deliberate trade-off discussed in the paper, and
+the equivalent behaviour can already be obtained by selecting
+the low-width variant via the existing flag. The change was
+therefore not propagated upstream.
+\item \textbf{Modification~5} (diagnostic checkpoints) is an
+instrumentation tool by design and was kept only in the local
+repository.
+\end{itemize}
+The pull request that consolidates Modifications~1 and~4
+together with the rewritten \texttt{README} was merged into the
+upstream repository \texttt{paper-codes/2025-TC} as
+PR~\#1.
+
 % =====================================================================
 \section{Comparison with related works}
 \label{sec:compare}
 % =====================================================================
 
 To contextualise the reproduction difficulties, seven related
-works were surveyed in
-\texttt{documentation/paper\_comparison/}. The selection covers
+works were surveyed and stored together with the rest of the
+project material in the repository. The selection covers
 two quantum algorithms for SSP-like problems, three quantum-walk
 papers on graphs other than the Johnson graph, and two papers on
 Grover-style search. Table~\ref{tab:papers} summarises them and
@@ -617,6 +690,69 @@ can be simulated end-to-end.}
 \label{tab:papers}
 \end{table}
 
+\subsection{Resource budget: their experiments versus ours}
+
+The first observation that emerges from Table~\ref{tab:papers}
+is the size of the experiments that the surveyed works actually
+run. The papers that publish a measured output distribution use
+between $5$ and $27$ qubits: $5$ for da Silva et al.\ on a
+$16$-element database, $6$--$12$ for Sato et al.\ and Zheng et
+al.\ on small SSP- and TSP-like instances, $4$--$10$ for the
+walks of Portugal \& Moqadam and Wing-Bocanegra, and up to $27$
+qubits for the free walk of Razzoli et al.\ that runs on real
+NISQ hardware. The only work in the table that does not publish
+a measured distribution is Perriello et al., whose targets reach
+roughly $2^{32}$ logical qubits and are therefore out of reach
+for any device or simulator currently available; that paper
+follows the same strategy as the one we studied and only
+publishes resource estimates.
+
+The MNRS pipeline of the paper we studied sits in a different
+budget. Even after the local fixes, the toy instance $J(3,1)$
+already requires $28$ qubits and roughly $1\,400$ gates, while
+$J(3,1)$ is below the regime in which MNRS provides any speed-up.
+The smallest instance that the paper itself considers
+non-trivial, $J(4,2)$ with $m=2$, is $38$ qubits and is also the
+smallest one explicitly tabulated. To enter a regime in which
+the spectral gap $\delta$ is strictly below $1$ and the algorithm
+has an actual amplification window to exploit, one needs at least
+$J(5,2)$ or $J(6,3)$, which Table~III of the paper extrapolates
+to several tens of qubits. The cryptographic regime targeted by
+the asymptotic analysis is much larger still: $n \ge 25$ for a
+T-count advantage over Grover and $n \ge 2^{13}$ for a T-depth
+advantage, with qubit counts that grow as $\Theta(n \log n)$.
+
+\subsection{Why we cannot run end-to-end and they can}
+
+Two ceilings explain why the surveyed works can publish a
+measured distribution while ours cannot:
+\begin{itemize}[leftmargin=1.2em]
+\item \textbf{Classical simulator ceiling.} A state-vector
+simulator on a workstation with $64$ GiB of RAM is limited to
+about $32$ qubits. The works in Table~\ref{tab:papers} that use
+a classical simulator stay well below this ceiling. The MNRS
+implementation of the paper we studied already exceeds it on its
+own smallest tabulated instance ($38$ qubits), which is why the
+authors do not publish a simulated output and why we were forced
+to drop down to $J(3,1)$, an instance that the paper itself
+considers trivial.
+\item \textbf{Real hardware ceiling.} Current NISQ devices offer
+$\sim 100$ noisy qubits with two-qubit gate error rates of
+$\sim 10^{-3}$. The papers that run on hardware (Razzoli et al.,
+Wing-Bocanegra et al., Zheng et al.) all use circuits that are
+either shallow (a single walk step, no reflection) or built on
+small registers (5--10 qubits) where the error budget is
+manageable. The MNRS pipeline targets a fault-tolerant device
+with effective error rates of order $10^{-15}$ and gate depths
+that grow with $1/\sqrt{\delta}$ inside QPE; both requirements
+are far above the capability of any device available today.
+\end{itemize}
+The combination of these two ceilings is what closes the door on
+end-to-end execution. The surveyed works either remove one of
+the constitutive ingredients of the algorithm or operate at a
+scale where one of the ceilings is still loose enough; the paper
+we studied does neither, by design.
+
 \subsection{The common pattern}
 
 Reading the seven papers together, a clear pattern emerges: each
@@ -667,62 +803,172 @@ anomalous.
 \label{sec:mapping}
 % =====================================================================
 
-\subsection{Method}
+\subsection{Method and reference framework}
 
 In parallel with the modifications, a structured comparison
-between the paper and the implementation was carried out and is
-recorded in \texttt{documentation/Code and test mapping.pptx}.
-The mapping walks through every algorithmic block described in
+between the paper and the reference implementation was carried
+out. The comparison covers every algorithmic block described in
 the paper --- input preparation (Dicke state, vertex binary
-encoding), update operator, marking oracle, QPE-based reflection,
-diffusion, output measurement --- and locates the corresponding
-sub-routine and tests in the code. For each block three questions
-were asked: whether the implementation behaves as the paper
-describes on inputs that we can simulate; whether the existing
-tests in the repository are sufficient to validate that
-behaviour; and whether the documentation makes it easy for a new
-reader to match the code with the paper. The output of the
-mapping is a list of items that were brought to the attention of
-the corresponding author and, after agreement on which of them
-were genuine issues, condensed into a single upstream pull
-request. The remainder of this section reports the findings in
-two groups: those that have been addressed and those that remain
-open.
+encoding), update operator $U_U$, marking oracle $U_f$,
+QPE-based approximate reflection, diffusion and output
+measurement --- and locates, for each block, the corresponding
+sub-routines and the unit tests provided in the repository.
+
+The evaluation is structured along the guidelines proposed by
+Moguel, Parejo, Ruiz-Cort\'es, Garcia-Alonso and
+Murillo~\cite{moguel2024} for empirical experiments in quantum
+software engineering. Their framework distinguishes two
+complementary axes: the \emph{reporting guidelines}, which
+describe what a quantum experiment must declare in order to be
+reproducible (qubit and gate requirements, classical
+pre/post-processing, framework version, random seeds, error
+mitigation), and the \emph{laboratory package} structure, which
+describes the artefacts that must accompany the experiment
+(scientific article, source code and dependencies, datasets,
+analysis scripts, log files, environment definition). We adopt
+the same nomenclature here and use the two checklists
+(Tables~\ref{tab:reporting} and~\ref{tab:labpackage}) as a
+methodological reference. The complete row-by-row evaluation
+that produced the two tables is preserved in the repository.
+
+Two clarifications are in order. First, all
+``$\checkmark$''~rows in the tables below correspond to items
+that the original code or the paper already covers, so they are
+listed as a single line per area; only rows marked ``$\sim$''
+(partially met) and ``\ding{55}'' (not met) are reported
+individually, since those are the actionable signals. Second,
+the ``Comment'' column refers to the original \texttt{cssp.py}
+as published with the paper; the modifications described in
+Section~\ref{sec:work} and the upstream pull request close some
+of these rows but not all, which is precisely the point of
+distinguishing addressed from open issues at the end of this
+section.
+
+\subsection{Reporting guidelines evaluation}
+
+Table~\ref{tab:reporting} reports the evaluation along the
+reporting axis. The original paper and code already satisfy the
+context, the experimental design of the initialisation routines,
+and the threats-to-validity discussion, so those rows are
+collapsed into a single ``$\checkmark$ rows'' summary line per
+area. The bootstrapping and platform-availability rows are not
+applicable to a deterministic local simulator and are omitted.
+
+\begin{table}[H]
+\centering
+\footnotesize
+\begin{tabular}{@{}p{0.18\linewidth} p{0.30\linewidth} c p{0.40\linewidth}@{}}
+\toprule
+\textbf{Area} & \textbf{Item} & \textbf{Status} & \textbf{Comment on the original code/paper} \\
+\midrule
+Context           & Q-bits, gates, depth, limitations of platform & $\checkmark$ rows & Polynomial qubit growth, depth analysis, NISQ feasibility limits all explicitly discussed in the paper. \\
+                  & Connectivity between qubits & $\sim$ & The paper assumes an all-to-all topology; current hardware constraints are acknowledged but not modelled. \\
+\midrule
+Experimental design & State-initialisation techniques (Dicke, $W$-states, VBE) & $\checkmark$ rows & Cleanly implemented in \texttt{qregs\_init.py} as described. \\
+                  & Justification for the number of shots & \ding{55} & The script prints raw amplitudes; no shot count is set or motivated. \\
+\midrule
+Execution         & Quantum framework declared (\texttt{myQLM}) & $\checkmark$ rows & The framework and the AQASM language are declared. \\
+                  & Pre/post-processing of classical data & $\sim$ & Sorting and bit-width computation are implicit in the script and are not formalised as separate steps. \\
+                  & Pinned framework version / dependencies & \ding{55} & No \texttt{requirements.txt}; reproducibility on a different machine is not guaranteed. \\
+                  & Random seeds for simulation & \ding{55} & No seed is logged; runs on different machines are not guaranteed to be bit-identical. \\
+                  & Readout error mitigation & \ding{55} & Not applicable to a noiseless simulator, but should be declared explicitly. \\
+\midrule
+Analysis          & Statistical model of the output distribution & \ding{55} & Probabilities are printed but no variance/aggregation across runs is reported. \\
+                  & Error correction or mitigation & \ding{55} & The paper assumes a fault-tolerant device; no QEC is modelled in the code. \\
+\midrule
+Threats to validity & Effect of different hardware; extension to other platforms & $\checkmark$ rows & Both points are addressed in the paper's discussion. \\
+\bottomrule
+\end{tabular}
+\caption{Reporting-guideline evaluation of the original
+implementation, following Moguel et al.~\cite{moguel2024}.
+Rows marked ``$\checkmark$ rows'' summarise items that the
+original code or the paper already satisfies; the others
+indicate gaps that the present analysis or the upstream pull
+request partially close.}
+\label{tab:reporting}
+\end{table}
+
+\subsection{Laboratory-package evaluation}
+
+Table~\ref{tab:labpackage} reports the evaluation along the
+laboratory-package axis. The original repository excels in the
+``Article'' and ``Experimental material'' sections (the paper
+and the source code are both rigorously presented), but lacks
+several of the engineering artefacts that the framework
+requires for full reproducibility.
+
+\begin{table}[H]
+\centering
+\footnotesize
+\begin{tabular}{@{}p{0.18\linewidth} p{0.30\linewidth} c p{0.40\linewidth}@{}}
+\toprule
+\textbf{Section} & \textbf{Item} & \textbf{Status} & \textbf{Comment on the original repository} \\
+\midrule
+Article             & Scientific article, design, context, authors & $\checkmark$ rows & Peer-reviewed paper, complete authorship, conceptual diagrams. \\
+\midrule
+Experimental material & Conceptual diagrams; full source code & $\checkmark$ rows & The paper is rich in circuit diagrams and the source is openly hosted. \\
+                    & Instructions for running the experiment & \ding{55} & No CI pipeline, no runner script and no formal ``how to launch'' guide. \\
+\midrule
+Datasets            & Pre-experimental data (built-in arrays, target) & $\checkmark$ rows & Sample inputs are included in the script. \\
+                    & Data processing (sorting, padding) & $\sim$ & Performed inline in the script, not exposed as a documented stage. \\
+                    & Resulting datasets / log files & \ding{55} & No logs or output files are produced by the original repository; we created our own captures. \\
+\midrule
+System              & Hardware/QPU requirements; NISQ vs.~FT discussion & $\checkmark$ rows & Section II of the paper covers the practical limits explicitly. \\
+                    & Description of the classical software architecture & $\sim$ & Visible in the source but not formalised in the documentation. \\
+\midrule
+Scripts             & Inline description of the algorithmic decisions & $\checkmark$ rows & Comments inside the routines explain the design choices. \\
+                    & Analysis scripts (CSV, plots) & \ding{55} & No script processes the simulation output programmatically. \\
+                    & Log file of the obtained results & \ding{55} & No structured logging is produced. \\
+\midrule
+Dictionary          & Public hosting of the artefacts & $\checkmark$ rows & GitHub repository, public visibility. \\
+                    & File/folder manifest & \ding{55} & No artefact dictionary; the role of every file must be inferred. \\
+                    & Download/run instructions & \ding{55} & The original \texttt{README} did not list dependencies or commands; this gap is closed by the rewritten file. \\
+                    & Explicit license file & $\sim$ & Implied by university policy but no \texttt{LICENSE} file is committed. \\
+                    & Virtual environment / Docker & \ding{55} & No \texttt{Dockerfile} or pinned environment. \\
+                    & Functionality verification (tests) & $\sim$ & Sub-routine tests exist; no end-to-end verification of \texttt{cssp.py}; no test for the \emph{low-width} variant of the sliding-sort. \\
+                    & DOI for the laboratory package & \ding{55} & The repository does not have an attached DOI. \\
+\bottomrule
+\end{tabular}
+\caption{Laboratory-package evaluation of the original
+repository, following Moguel et al.~\cite{moguel2024}. The
+``$\checkmark$ rows'' summary lines collapse the items that the
+repository already provides; only ``$\sim$'' and
+``\ding{55}'' rows are reported in detail.}
+\label{tab:labpackage}
+\end{table}
 
 \subsection{Critical points that have been addressed}
 
-The following items were submitted to the upstream repository
-\texttt{paper-codes/2025-TC} as pull request~\#1 (branch
-\texttt{correctness/mod1-mod4}) and are awaiting merge at the
-time of writing.
+The two evaluations above identify a set of issues that were
+agreed with the paper authors and closed via the upstream pull
+request that consolidates the project's correctness fixes.
 
 \paragraph{Asymmetric reflections inside the QPE block.}
 Both Reflection~A and Reflection~B now control the phase flip on
-the full coin register of $n$ qubits, with the corresponding
-$X$-sandwich applied symmetrically to both halves. This is the
-content of Modification~1 of Section~\ref{sec:work}.
+the full coin register, with the corresponding $X$-sandwich
+applied symmetrically to both halves. This corresponds to
+Modification~1 of Section~\ref{sec:work}.
 
 \paragraph{Degenerate QPE register on small instances.}
 The lower bound on $\ell_s$ has been raised so that the QPE
-register is never trivial; the change is invisible on instances
-where the original formula already returned a value above the
-new floor, and it is therefore fully backward-compatible. This
-is the content of Modification~4.
+register is never trivial. The change is invisible on instances
+in which the original formula already returned a value above the
+new floor, hence fully backward-compatible. This corresponds to
+Modification~4.
 
 \paragraph{Documentation gap between paper and code.}
-The original \texttt{README} of the repository did not cite the
-paper, did not list the dependencies and did not describe the
-command-line interface of \texttt{cssp.py}. It was rewritten with
-a citation to the IEEE TC paper, an explicit list of
-requirements (\texttt{myQLM}, \texttt{qat-utils}) and a usage
-block that matches the actual flags accepted by the script.
+The original \texttt{README} did not cite the paper, did not
+list the dependencies and did not describe the command-line
+interface of \texttt{cssp.py}. The rewritten file adds the
+citation, an explicit list of requirements
+(\texttt{myQLM}, \texttt{qat-utils}) and a usage block matching
+the actual flags accepted by the script.
 
 \subsection{Critical points that remain open}
 
-A second group of items emerged from the mapping but lies outside
-the scope of a small, targeted pull request. They are listed
-here for completeness, since they are the natural next steps of
-the project.
+The other ``$\sim$'' and ``\ding{55}'' rows of
+Tables~\ref{tab:reporting} and~\ref{tab:labpackage} are not
+fixed by the present pull request and remain natural next steps.
 
 \paragraph{End-to-end validation is structurally infeasible on a
 state-vector simulator.}
@@ -737,22 +983,26 @@ The removal of the destructive cleanup block (Modification~2) is
 a local mitigation: a per-element reset of $\alpha$ and $\omega$
 that does not touch the entangled state would be the proper fix,
 but it requires a different construction and was therefore not
-included in the current pull request.
+included in the upstream pull request.
 
 \paragraph{Test coverage of the composite walk operator.}
 The existing tests cover the building blocks
 (\texttt{insert}, \texttt{delete}, oracle, Dicke preparation) in
 isolation, but there is no test that exercises the full walk
-operator $U_W$ as a single unit on a small Johnson graph. The
-bugs identified in Modifications~1 and~3 would have been caught
-earlier by such a test.
+operator $U_W$ as a single unit, and there is no test for the
+\emph{low-width} variant of the sliding-sort routine. The bugs
+identified in Modifications~1 and~3 would have been caught
+earlier by such tests.
 
-\paragraph{Mapping of paper symbols to code identifiers.}
-The register names in the code do not always match the symbols
-used in the paper (for example the role of $\alpha_0$ versus
-$\alpha_1$, or the two halves of the coin). A short
-correspondence table inside the repository would significantly
-shorten the on-boarding time of any future contributor.
+\paragraph{Reproducibility artefacts.}
+The repository does not provide a pinned environment
+(\texttt{requirements.txt}, \texttt{Dockerfile}), random seeds
+for the simulator, an explicit \texttt{LICENSE} file, an
+artefact dictionary, or a script for processing the output of
+\texttt{cssp.py} (CSV, plots). All of these are required by the
+laboratory-package framework of Moguel et al.\ and would
+significantly shorten the on-boarding time of any future
+contributor.
 
 % =====================================================================
 \section{Conclusions}
@@ -775,15 +1025,13 @@ related work succeeds in simulating an MNRS walk on a Johnson
 graph end-to-end, and that the working alternatives correspond to
 relaxing one of the constitutive ingredients of the algorithm.
 
-The agreed correctness fixes were submitted to the upstream
+The agreed correctness fixes were merged into the upstream
 repository \texttt{paper-codes/2025-TC} as pull request~\#1,
 which contains the symmetric reflections, the lower bound on
-$\ell_s$ and the rewritten \texttt{README}. The pull request is
-under review by the corresponding author and is awaiting merge.
-A patched local copy with all five modifications applied is
-available in \texttt{code\_updated/cssp.py}, and the full
-chronology of the changes is documented in
-\texttt{documentation/modification\_report/}.
+$\ell_s$ and the rewritten \texttt{README}. A patched local copy
+with all five modifications applied, together with the full
+chronology of the changes and the simulation logs, is preserved
+in the project repository.
 
 The natural continuation of the project would follow one of the
 two paths suggested by the literature comparison: either a direct
@@ -801,5 +1049,16 @@ this codebase.
 
 \noindent\textbf{Repository.}
 \url{https://github.com/jacopobellosi/Solving-the-Subset-Sum-Problem-via-Quantum-Walk-Search}
+
+\bigskip
+
+\begin{thebibliography}{1}
+\bibitem{moguel2024}
+E.~Moguel, J.~A.~Parejo, A.~Ruiz-Cort\'es, J.~Garcia-Alonso and
+J.~M.~Murillo,
+\emph{Quantum software experiments: A reporting and laboratory
+package structure guidelines},
+arXiv:2405.04192, ACM, 2024.
+\end{thebibliography}
 
 \end{document}
