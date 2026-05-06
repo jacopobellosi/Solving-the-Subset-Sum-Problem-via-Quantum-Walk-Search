@@ -142,7 +142,7 @@ The paper builds the algorithm from four components.
 \paragraph{(1) Johnson graph $J(n,k)$.}
 The search space of the problem is represented as a graph. Each vertex is one possible $k$-subset of the input list; two vertices are connected by an edge if the corresponding subsets differ in exactly one element. This graph is called the Johnson graph $J(n,k)$.
 
-The \emph{spectral gap}~$\delta$ is a number between $0$ and $1$ that measures how well-connected the graph is. A larger gap means a random walk on the graph mixes quickly, while a smaller gap means the walk needs more steps to explore it. For the Johnson graph, the spectral gap has the closed-form value:
+The \emph{spectral gap}~$\delta$ measures how well-connected the graph is: when $\delta$ is close to~$1$ the graph mixes quickly, while a smaller $\delta$ means the walk needs more steps to explore it. For the Johnson graph the formula is:
 \[
 \delta \;=\; \frac{n}{k(n-k)} , \qquad 1 \le k \le n-1 .
 \]
@@ -173,8 +173,8 @@ where $T_S$ is the cost of preparing the stationary state, $T_U$ the cost of one
 
 The paper provides closed-form analytical estimates of gate
 count, depth and qubit count of every sub-routine; a comparison
-against a Grover baseline showing better T-count for $n \gtrsim 32$
-and better T-depth for $n \gtrsim 2^{13}$; and reference
+against a Grover baseline showing better T-count for $n \ge 25$
+and better T-depth for $n \ge 2^{13}$; and reference
 open-source implementations in Qiskit and \texttt{myQLM}. It does
 not, however, run the algorithm end-to-end on any concrete
 instance: the cryptographic regime targeted by the paper is far
@@ -448,7 +448,7 @@ the other eigenphases of $U_W$.
 \subsection{Why the output remains flat after the fixes}
 
 After Modifications 1--5 the marginal distribution on $S_1$ is
-still $(\tfrac13,\tfrac13,\tfrac13)$. The reason is not a single
+still $(\tfrac13,\tfrac13,\tfrac13)$ (Table~\ref{tab:mods}). The reason is not a single
 local bug, but a structural mismatch between the regime in which
 MNRS delivers a quadratic speed-up and the smallest instances that
 are small enough to be simulated. On $J(3,1) \equiv K_3$ the
@@ -626,16 +626,16 @@ follows the same strategy as the one we studied and only
 publishes resource estimates.
 
 The MNRS pipeline of the paper we studied sits in a different
-budget. Even after the local fixes, the smallest instance $J(3,1)$
-already requires $28$ qubits and roughly $1\,400$ gates, while
+budget. Even after all five modifications, the smallest instance $J(3,1)$
+already requires $30$ qubits and roughly $1\,400$ gates, while
 $J(3,1)$ is below the regime in which MNRS provides any speed-up.
 The smallest instance that the paper itself considers
-non-trivial, $J(4,2)$ with $m=2$, is $38$ qubits and is also the
+non-trivial, $J(4,2)$ with bit-width $m=2$ bits per element, is $38$ qubits and is also the
 smallest one explicitly tabulated. To enter a regime in which
 the spectral gap $\delta$ is strictly below $1$ and the algorithm
 has an actual amplification window to exploit, one needs at least
-$J(5,2)$ or $J(6,3)$, which Table~III of the paper extrapolates
-to several tens of qubits. The cryptographic regime targeted by
+$J(5,2)$, $J(6,2)$ or $J(6,3)$, which Table~III of the paper tabulates
+as requiring several tens of qubits. The cryptographic regime targeted by
 the asymptotic analysis is much larger still: $n \ge 25$ for a
 T-count advantage over Grover and $n \ge 2^{13}$ for a T-depth
 advantage, with qubit counts that grow as $\Theta(n \log n)$.
