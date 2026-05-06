@@ -76,7 +76,7 @@ Walk Search''} (Lancellotti, Perriello, Barenghi, Pelosi; IEEE
 Transactions on Computers, vol.~75, n.~1, 2026). The paper
 proposes a gate-level quantum algorithm for the Constrained
 Subset Sum Problem (CSSP) and provides a reference implementation
-in \texttt{myQLM}; the task was to read the paper and the code
+in \texttt{myQLM}; the assignment was to read the paper and the code
 thoroughly, run the algorithm on an instance small enough to be
 simulated classically, and verify whether the simulated output
 matched the expected behaviour. When the output turned out to be
@@ -87,9 +87,21 @@ authors.
 
 \subsection{The paper at a glance}
 
-The Subset Sum Problem (SSP) asks: given a list of integers, does any subset of them sum to a target value~$p$? The \emph{constrained} variant (CSSP) adds one more condition: the subset must contain exactly $k$ elements. The problem is NP-complete and is used in post-quantum cryptography, which makes it a natural target for quantum algorithms.
 
-The paper proposes a quantum algorithm that searches for the solution by performing a \emph{quantum walk} on the Johnson graph $J(n,k)$: a graph whose vertices are all possible $k$-subsets of the input list, and whose edges connect subsets that differ in exactly one element. The walk is combined with a sum-checking step so that, after a number of iterations proportional to $\sqrt{\binom{n}{k}}$, the probability of measuring the correct subset increases. The algorithm belongs to the MNRS framework, a generalisation of Grover's search algorithm. The formal details are given in Section~\ref{sec:paper}.
+The Subset Sum Problem (SSP) asks whether a subset of a given
+multiset of integers sums to a target value $p$. The
+\emph{constrained} variant (CSSP) further requires the subset to
+contain exactly $k$ elements. SSP is NP-hard and underlies
+several post-quantum cryptographic constructions, so it is a
+natural target for quantum algorithms. The paper attacks CSSP
+with an MNRS quantum walk on the Johnson graph $J(n,k)$, whose
+vertices are the candidate $k$-subsets and whose edges connect
+subsets that differ in one element. The walk is interleaved with
+a sum-checking oracle and with a QPE-based approximate
+reflection so that, after a number of outer iterations of order
+$\sqrt{N/M}$ with $N=\binom{n}{k}$ and $M$ the number of
+solutions, the amplitude on the marked vertex grows.
+
 
 \subsection{Structure of the report}
 
@@ -465,7 +477,7 @@ the size of the simulator.
 2 & 20 Mar & Genuine bug fix & $2547 \to 1359$ ($-47\%$) & flat \\
 3 & 22 Mar & Structural fix  & $1359 \to 1366$ & flat \\
 4 & 27 Mar & Defensive patch & $1366$ ($28 \to 30$ qubits) & flat \\
-5 & 17 Apr & Diagnostic tool & no change & flat (now understood) \\
+5 & 17 Apr & Diagnostic tool & no change & flat  \\
 \bottomrule
 \end{tabular}
 \caption{The five modifications, in chronological order, with the
