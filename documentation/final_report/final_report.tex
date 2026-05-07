@@ -13,6 +13,8 @@
 \usepackage{float}
 \usepackage{enumitem}
 \usepackage{pifont}
+\usepackage{pgfplots}
+\pgfplotsset{compat=1.18}
 
 \hypersetup{colorlinks=true, linkcolor=blue, urlcolor=blue, citecolor=blue}
 
@@ -518,18 +520,18 @@ upstream repository \texttt{paper-codes/2025-TC} as
 PR~\#1.
 
 % =====================================================================
-\section{Comparison with related works}
+\section{Comparison with related quantum-search papers}
 \label{sec:compare}
 % =====================================================================
 
 To contextualise the reproduction difficulties, seven related
-works were surveyed and stored together with the rest of the
-project material in the repository. The selection covers
-two quantum algorithms for SSP-like problems, three quantum-walk
-papers on graphs other than the Johnson graph, and two papers on
-Grover-style search. Table~\ref{tab:papers} summarises them and
-records, for each one, why the proposed algorithm is amenable to
-end-to-end simulation while the one in our paper is not.
+works were surveyed~\cite{zheng2022,sato2024,perriello2021,razzoli2024,dasilva2024,portugal2025,wingbocanegra2025}.
+The selection covers two quantum algorithms for SSP-like problems,
+three quantum-walk papers on graphs other than the Johnson graph,
+and two papers on Grover-style search.
+Table~\ref{tab:papers} summarises them and records, for each one,
+why the proposed algorithm is amenable to end-to-end simulation
+while the one in our paper is not.
 
 \begin{table}[H]
 \centering
@@ -543,56 +545,49 @@ end-to-end simulation while the one in our paper is not.
 \textbf{Instance simulated} & \textbf{Validation platform} &
 \textbf{Small description}\\
 \midrule
-Zheng et al., 2022
-(\texttt{s11432-021-3334-1})
+Zheng et al., 2022~\cite{zheng2022}
 & QPE + Amplitude Amplification for SSP
 & $|S|{=}4$, $w{=}12$, $10$ qubits
 & Qiskit + IBM Q hardware
 & No quantum walk: the oracle marks the sum directly, so there
 is no spectral-gap dependence and no QPE precision constraint.\\
 \midrule
-Sato et al., 2024
-(\texttt{2405.07129v3})
+Sato et al., 2024~\cite{sato2024}
 & Two-step Grover for TSP, HOBO encoding
 & $n{=}3,4$ cities, $6$/$12$ qubits
 & Qiskit Aer
 & Compact encoding, no walk, the diffusion is the standard
 Grover one.\\
 \midrule
-Perriello et al., 2021
-(\texttt{ISD.pdf})
+Perriello et al., 2021~\cite{perriello2021}
 & Grover for ISD on Prange formulation
 & crypto sizes ($\sim 2^{32}$ qubits)
 & Atos QLM, sub-component validation only
 & No end-to-end simulation: the paper publishes resource
 estimates, not measured probabilities.\\
 \midrule
-Razzoli et al., 2024
-(\texttt{entropy-26-00313})
+Razzoli et al., 2024~\cite{razzoli2024}
 & Discrete-time walk on cycles, no marking
 & $N=4,8$, hardware run
 & IBM \textsf{ibm\_cairo} (27 qubits)
 & Free walk, no oracle and no reflection: nothing depends on the
 spectral gap.\\
 \midrule
-da Silva et al., 2024
-(\texttt{entropy-26-00668})
+da Silva et al., 2024~\cite{dasilva2024}
 & Standard Grover on a database of $16$ colours
 & $5$ qubits
 & PyLinalg + NoisyQProc
 & $N=16$, well inside the regime where $\sqrt{N}$ iterations
 remain few.\\
 \midrule
-Portugal \& Moqadam, 2025
-(\texttt{entropy-27-00454-v2})
+Portugal and Moqadam, 2025~\cite{portugal2025}
 & Continuous-time walk on $K_N$, $K_{n,n}$, $Q_n$
 & $K_8$, $K_{32,32}$, $Q_{10}$
 & Qiskit + Hiperwalk
 & Highly symmetric graphs whose spectrum is known in closed
 form; no QPE.\\
 \midrule
-Wing-Bocanegra et al., 2025
-(\texttt{s41598-025-87304-0})
+Wing-Bocanegra et al., 2025~\cite{wingbocanegra2025}
 & Single-step walk on $K_{2^n}$ for QAOA initialisation
 & $K_4$ to $K_{64}$
 & Qiskit + IBM \textsf{ibmq\_manila}
@@ -600,8 +595,8 @@ Wing-Bocanegra et al., 2025
 spectral-gap dependence.\\
 \bottomrule
 \end{tabular}
-\caption{Related quantum-search papers and the reason each one
-can be simulated end-to-end.}
+\caption{Related quantum-search papers surveyed for comparison and the reason
+each one can be simulated end-to-end while the paper studied here cannot.}
 \label{tab:papers}
 \end{table}
 
@@ -636,6 +631,61 @@ as requiring several tens of qubits. The cryptographic regime targeted by
 the asymptotic analysis is much larger still: $n \ge 25$ for a
 T-count advantage over Grover and $n \ge 2^{13}$ for a T-depth
 advantage, with qubit counts that grow as $\Theta(n \log n)$.
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}
+\begin{axis}[
+    xbar,
+    width=0.88\linewidth,
+    height=7.8cm,
+    bar width=0.36cm,
+    xlabel={Qubits (largest simulated instance)},
+    xlabel style={font=\small},
+    symbolic y coords={
+        {da Silva (2024)},
+        {Wing-Bocanegra (2025)},
+        {Zheng (2022)},
+        {Portugal-Moqadam (2025)},
+        {Sato (2024)},
+        {Razzoli (2024)},
+        {This work J(3,1)},
+        {This work J(4,2)}},
+    ytick=data,
+    tick label style={font=\small},
+    nodes near coords,
+    nodes near coords align=horizontal,
+    nodes near coords style={font=\scriptsize},
+    xmin=0, xmax=50,
+    legend style={at={(0.97,0.05)},anchor=south east,font=\small},
+    legend cell align=left,
+]
+\addplot[fill=blue!20, draw=blue!60] coordinates {
+    (5,  {da Silva (2024)})
+    (6,  {Wing-Bocanegra (2025)})
+    (10, {Zheng (2022)})
+    (10, {Portugal-Moqadam (2025)})
+    (12, {Sato (2024)})
+    (27, {Razzoli (2024)})
+};
+\addplot[fill=orange!40, draw=orange!70] coordinates {
+    (30, {This work J(3,1)})
+    (38, {This work J(4,2)})
+};
+\legend{Related works, This work}
+\end{axis}
+\end{tikzpicture}
+\caption{Qubit budget comparison across the surveyed works. Each bar shows the
+qubit count of the largest instance that the paper actually simulated (or, for
+this work, the count after all five modifications). \textit{This work}~$J(3,1)$
+was simulated ($30$ qubits, ${\approx}1\,400$ gates); $J(4,2)$ is the paper's
+smallest non-trivial instance ($38$ qubits) and exceeds the simulator ceiling.
+Perriello et al.\ is excluded: resource estimates only
+(${\approx}2^{32}$ logical qubits, off scale). Gate counts for the related
+works are not reported in a comparable form; see Table~\ref{tab:mods} for the
+gate progression of this work across its five modifications.}
+\label{fig:qubit-comparison}
+\end{figure}
 
 \subsection{Constraints on End-to-End Simulation}
 
@@ -732,8 +782,9 @@ reporting axis. The original paper and code already satisfy the
 context, the experimental design of the initialisation routines,
 and the threats-to-validity discussion, so those rows are
 collapsed into a single ``$\checkmark$ rows'' summary line per
-area. The bootstrapping and platform-availability rows are not
-applicable to a deterministic local simulator and are omitted.
+area. Items from the Experimental Planning area are not
+applicable to a deterministic local simulator and are listed
+separately at the bottom of the table.
 
 \begin{table}[H]
 \centering
@@ -758,6 +809,11 @@ Analysis          & Statistical model of the output distribution & \ding{55} & P
                   & Error correction or mitigation & \ding{55} & The paper assumes a fault-tolerant device; no QEC is modelled in the code. \\
 \midrule
 Threats to validity & Effect of different hardware; extension to other platforms & $\checkmark$ rows & Both points are addressed in the paper's discussion. \\
+\midrule
+\multicolumn{4}{l}{\textit{Items not applicable to a deterministic local simulator (Experimental Planning area, Moguel et al.)}} \\[2pt]
+Experimental planning & Bootstrapping needs & N/A & Deterministic state-vector simulation; no warm-up or bootstrapping procedure is needed. \\
+                      & Target platform execution limitations & N/A & No QPU queue, cost cap, or backend selection to plan around; \texttt{myQLM} runs locally on demand. \\
+                      & Target platform planning limitations & N/A & No cloud scheduling or access-token management required for a local open-source simulator. \\
 \bottomrule
 \end{tabular}
 \caption{Reporting-guideline evaluation of the original
@@ -808,6 +864,10 @@ Dictionary          & Public hosting of the artefacts & $\checkmark$ rows & GitH
                     & Virtual environment / Docker & \ding{55} & No \texttt{Dockerfile} or pinned environment. \\
                     & Functionality verification (tests) & $\sim$ & Sub-routine tests exist; no end-to-end verification of \texttt{cssp.py}; no test for the \emph{low-width} variant of the sliding-sort. \\
                     & DOI for the laboratory package & \ding{55} & The repository does not have an attached DOI. \\
+\midrule
+\multicolumn{4}{l}{\textit{Items not applicable to a noiseless local simulator (Moguel et al.)}} \\[2pt]
+System & QPU provider restrictions (queue, decoherence, backend availability) & N/A & Not applicable; \texttt{PyLinalg} is a noiseless local simulator with no external provider, queue, or backend selection. \\
+       & Hardware calibration data (qubit topology, connectivity map) & N/A & Not applicable; all-to-all connectivity is assumed and no physical noise model is used. \\
 \bottomrule
 \end{tabular}
 \caption{Laboratory-package evaluation of the original
@@ -820,9 +880,13 @@ repository already provides; only ``$\sim$'' and
 
 \subsection{Critical points that have been addressed}
 
-The two evaluations above identify a set of issues that were
-agreed with the paper authors and closed via the upstream pull
-request that consolidates the project's correctness fixes.
+The following items from Tables~\ref{tab:reporting}
+and~\ref{tab:labpackage} above, and from the broader code-and-paper
+mapping, were closed by the upstream pull request or by artefacts
+produced during this project. The two code correctness fixes
+(Modifications~1 and~4) are described in full in
+Section~\ref{sec:work}; they are noted here because they emerged
+directly from the mapping analysis.
 
 \paragraph{Asymmetric reflections inside the QPE block.}
 Both Reflection~A and Reflection~B now control the phase flip on
@@ -843,7 +907,9 @@ list the dependencies and did not describe the command-line
 interface of \texttt{cssp.py}. The rewritten file adds the
 citation, an explicit list of requirements
 (\texttt{myQLM}, \texttt{qat-utils}) and a usage block matching
-the actual flags accepted by the script.
+the actual flags accepted by the script. This closes the
+\ding{55}~row \emph{Download/run instructions} in
+Table~\ref{tab:labpackage}.
 
 \subsection{Critical points that remain open}
 
@@ -903,7 +969,56 @@ Future work could follow one of two paths: a direct Grover search on a compact v
 
 \bigskip
 
-\begin{thebibliography}{1}
+\begin{thebibliography}{9}
+\bibitem{zheng2022}
+Q.~Zheng, P.~Zhu, S.~Xue, Y.~Wang, C.~Wu, X.~Yu, M.~Yu, Y.~Liu, M.~Deng,
+J.~Wu and P.~Xu,
+\emph{Quantum algorithm and experimental demonstration for the subset sum
+problem},
+Science China Information Sciences, vol.~65, no.~8, art.~182501, Aug.~2022.
+DOI: 10.1007/s11432-021-3334-1.
+
+\bibitem{sato2024}
+R.~Sato, G.~Cui, K.~Saito, H.~Kawashima, T.~Nikuni and S.~Watabe,
+\emph{Two-step quantum search algorithm for solving traveling salesman
+problems},
+arXiv:2405.07129, 2024.
+
+\bibitem{perriello2021}
+S.~Perriello, A.~Barenghi and G.~Pelosi,
+\emph{A complete quantum circuit to solve the information set decoding
+problem},
+in \emph{Proc.\ IEEE Int.\ Conf.\ Quantum Computing and Engineering (QCE)},
+pp.~366--377, Oct.~2021.
+
+\bibitem{razzoli2024}
+L.~Razzoli, G.~Cenedese, M.~Bondani and G.~Benenti,
+\emph{Efficient implementation of discrete-time quantum walks on quantum
+computers},
+Entropy, vol.~26, art.~313, Apr.~2024.
+DOI: 10.3390/e26040313.
+
+\bibitem{dasilva2024}
+M.~H.~F.~da~Silva, G.~F.~de~Jesus and C.~Cruz,
+\emph{Effect of pure dephasing quantum noise in the quantum search algorithm
+using Atos quantum assembly},
+Entropy, vol.~26, art.~668, Aug.~2024.
+DOI: 10.3390/e26080668.
+
+\bibitem{portugal2025}
+R.~Portugal and J.~K.~Moqadam,
+\emph{Efficient circuit implementations of continuous-time quantum walks for
+quantum search},
+Entropy, vol.~27, art.~454, 2025.
+DOI: 10.3390/e27050454.
+
+\bibitem{wingbocanegra2025}
+A.~Wing-Bocanegra, C.~E.~Quintero-Narvaez and S.~E.~Venegas-Andraca,
+\emph{Circuit implementation and analysis of a quantum-walk based search
+complement algorithm},
+Scientific Reports, vol.~15, art.~4865, 2025.
+DOI: 10.1038/s41598-025-87304-0.
+
 \bibitem{moguel2024}
 E.~Moguel, J.~A.~Parejo, A.~Ruiz-Cort\'es, J.~Garcia-Alonso and
 J.~M.~Murillo,
