@@ -631,60 +631,76 @@ as requiring several tens of qubits. The cryptographic regime targeted by
 the asymptotic analysis is much larger still: $n \ge 25$ for a
 T-count advantage over Grover and $n \ge 2^{13}$ for a T-depth
 advantage, with qubit counts that grow as $\Theta(n \log n)$.
+Figure~\ref{fig:scaling} shows the qubit and gate scaling of the MNRS
+circuit as $n$ increases, together with the qubit ceiling of the related
+works for comparison.
 
 \begin{figure}[H]
 \centering
 \begin{tikzpicture}
 \begin{axis}[
-    xbar,
-    width=0.88\linewidth,
-    height=7.8cm,
-    bar width=0.36cm,
-    xlabel={Qubits (largest simulated instance)},
+    name=mainplot,
+    width=0.90\linewidth,
+    height=7.5cm,
+    axis y line*=left,
+    axis x line*=bottom,
+    xlabel={Input size $n$},
+    ylabel={Qubits},
     xlabel style={font=\small},
-    symbolic y coords={
-        {da Silva (2024)},
-        {Wing-Bocanegra (2025)},
-        {Zheng (2022)},
-        {Portugal-Moqadam (2025)},
-        {Sato (2024)},
-        {Razzoli (2024)},
-        {This work J(3,1)},
-        {This work J(4,2)}},
-    ytick=data,
+    ylabel style={font=\small, color=blue!70!black},
+    yticklabel style={font=\small, color=blue!70!black},
     tick label style={font=\small},
-    nodes near coords,
-    nodes near coords align=horizontal,
-    nodes near coords style={font=\scriptsize},
-    xmin=0, xmax=50,
-    legend style={at={(0.97,0.05)},anchor=south east,font=\small},
-    legend cell align=left,
+    xmin=2.8, xmax=10.5,
+    ymin=0, ymax=145,
+    xtick={3,4,5,7,10},
+    ytick={0,30,60,90,120},
+    grid=major,
+    grid style={dotted, gray!35},
+    legend pos=north west,
+    legend style={font=\scriptsize, fill=white, draw=gray!50},
 ]
-\addplot[fill=blue!20, draw=blue!60] coordinates {
-    (5,  {da Silva (2024)})
-    (6,  {Wing-Bocanegra (2025)})
-    (10, {Zheng (2022)})
-    (10, {Portugal-Moqadam (2025)})
-    (12, {Sato (2024)})
-    (27, {Razzoli (2024)})
-};
-\addplot[fill=orange!40, draw=orange!70] coordinates {
-    (30, {This work J(3,1)})
-    (38, {This work J(4,2)})
-};
-\legend{Related works, This work}
+\addplot[gray!55, dashed, line width=0.9pt, forget plot]
+    coordinates {(2.8,27)(10.5,27)};
+\addplot[red!55, densely dotted, line width=0.9pt, forget plot]
+    coordinates {(2.8,32)(10.5,32)};
+\addplot[blue!70!black, solid, line width=1.3pt, mark=*, mark size=2.2pt]
+    coordinates {(3,30)(4,38)(5,57)(7,75)(10,126)};
+\addlegendentry{MNRS qubits (left axis)}
+\addlegendimage{orange!80!black, dashed, line width=1.3pt, mark=square*,
+    mark size=2pt}
+\addlegendentry{MNRS gates U$+$CNOT (right axis)}
+\node[font=\scriptsize, gray!65, anchor=west]
+    at (axis cs:5.5,22) {Related works ceiling (27 q.)};
+\node[font=\scriptsize, red!65, anchor=west]
+    at (axis cs:5.5,34.5) {Simulator ceiling ($\approx$32 q.)};
+\end{axis}
+\begin{axis}[
+    width=0.90\linewidth,
+    height=7.5cm,
+    axis y line*=right,
+    axis x line=none,
+    ylabel={Total gates (U$+$CNOT)},
+    ylabel style={font=\small, color=orange!80!black},
+    yticklabel style={font=\small, color=orange!80!black},
+    xmin=2.8, xmax=10.5,
+    ymin=0, ymax=70000,
+    scaled y ticks=false,
+    ytick={0,20000,40000,60000},
+]
+\addplot[orange!80!black, dashed, line width=1.3pt, mark=square*, mark size=2pt]
+    coordinates {(4,7560)(5,16350)(7,27335)(10,59324)};
 \end{axis}
 \end{tikzpicture}
-\caption{Qubit budget comparison across the surveyed works. Each bar shows the
-qubit count of the largest instance that the paper actually simulated (or, for
-this work, the count after all five modifications). \textit{This work}~$J(3,1)$
-was simulated ($30$ qubits, ${\approx}1\,400$ gates); $J(4,2)$ is the paper's
-smallest non-trivial instance ($38$ qubits) and exceeds the simulator ceiling.
-Perriello et al.\ is excluded: resource estimates only
-(${\approx}2^{32}$ logical qubits, off scale). Gate counts for the related
-works are not reported in a comparable form; see Table~\ref{tab:mods} for the
-gate progression of this work across its five modifications.}
-\label{fig:qubit-comparison}
+\caption{Scaling of qubits (left axis, solid blue) and total gate count
+U$+$CNOT (right axis, dashed orange) for the MNRS algorithm as $n$ increases,
+with $k=\lfloor n/2 \rfloor$.
+Qubit count at $n=3$ is from this work's measurements; all other values are
+from Table~III of the paper (Qiskit basis, $n \in \{4,5,7,10\}$).
+Gate counts for the related works are not reported in a comparable form.
+The dashed grey line marks the highest qubit count among the related works
+(27~qubits, Razzoli et al.~\cite{razzoli2024}); the dotted red line marks the
+approximate state-vector simulator ceiling ($\approx$32~qubits).}
+\label{fig:scaling}
 \end{figure}
 
 \subsection{Constraints on End-to-End Simulation}
@@ -789,7 +805,8 @@ separately at the bottom of the table.
 \begin{table}[H]
 \centering
 \footnotesize
-\begin{tabular}{@{}p{0.18\linewidth} p{0.30\linewidth} c p{0.40\linewidth}@{}}
+\setlength{\tabcolsep}{4pt}
+\begin{tabular}{@{}p{0.18\linewidth} p{0.29\linewidth} c p{0.39\linewidth}@{}}
 \toprule
 \textbf{Area} & \textbf{Item} & \textbf{Status} & \textbf{Comment on the original code/paper} \\
 \midrule
@@ -809,11 +826,11 @@ Analysis          & Statistical model of the output distribution & \ding{55} & P
                   & Error correction or mitigation & \ding{55} & The paper assumes a fault-tolerant device; no QEC is modelled in the code. \\
 \midrule
 Threats to validity & Effect of different hardware; extension to other platforms & $\checkmark$ rows & Both points are addressed in the paper's discussion. \\
-\midrule
-\multicolumn{4}{l}{\textit{Items not applicable to a deterministic local simulator (Experimental Planning area, Moguel et al.)}} \\[2pt]
-Experimental planning & Bootstrapping needs & N/A & Deterministic state-vector simulation; no warm-up or bootstrapping procedure is needed. \\
-                      & Target platform execution limitations & N/A & No QPU queue, cost cap, or backend selection to plan around; \texttt{myQLM} runs locally on demand. \\
-                      & Target platform planning limitations & N/A & No cloud scheduling or access-token management required for a local open-source simulator. \\
+\specialrule{1.2pt}{4pt}{3pt}
+\multicolumn{4}{l}{\textbf{Items not applicable} --- deterministic local simulator (Experimental Planning, Moguel et al.)} \\[3pt]
+Experimental planning & Bootstrapping needs & N/A & Deterministic state-vector simulation; no warm-up or bootstrapping is needed. \\[2pt]
+                      & Target platform execution limitations & N/A & No QPU queue, cost cap, or backend selection; \texttt{myQLM} runs locally on demand. \\[2pt]
+                      & Target platform planning limitations & N/A & No cloud scheduling or access-token management required. \\
 \bottomrule
 \end{tabular}
 \caption{Reporting-guideline evaluation of the original
@@ -837,7 +854,8 @@ requires for full reproducibility.
 \begin{table}[H]
 \centering
 \footnotesize
-\begin{tabular}{@{}p{0.18\linewidth} p{0.30\linewidth} c p{0.40\linewidth}@{}}
+\setlength{\tabcolsep}{4pt}
+\begin{tabular}{@{}p{0.18\linewidth} p{0.29\linewidth} c p{0.39\linewidth}@{}}
 \toprule
 \textbf{Section} & \textbf{Item} & \textbf{Status} & \textbf{Comment on the original repository} \\
 \midrule
@@ -864,10 +882,10 @@ Dictionary          & Public hosting of the artefacts & $\checkmark$ rows & GitH
                     & Virtual environment / Docker & \ding{55} & No \texttt{Dockerfile} or pinned environment. \\
                     & Functionality verification (tests) & $\sim$ & Sub-routine tests exist; no end-to-end verification of \texttt{cssp.py}; no test for the \emph{low-width} variant of the sliding-sort. \\
                     & DOI for the laboratory package & \ding{55} & The repository does not have an attached DOI. \\
-\midrule
-\multicolumn{4}{l}{\textit{Items not applicable to a noiseless local simulator (Moguel et al.)}} \\[2pt]
-System & QPU provider restrictions (queue, decoherence, backend availability) & N/A & Not applicable; \texttt{PyLinalg} is a noiseless local simulator with no external provider, queue, or backend selection. \\
-       & Hardware calibration data (qubit topology, connectivity map) & N/A & Not applicable; all-to-all connectivity is assumed and no physical noise model is used. \\
+\specialrule{1.2pt}{4pt}{3pt}
+\multicolumn{4}{l}{\textbf{Items not applicable} --- noiseless local simulator (System section, Moguel et al.)} \\[3pt]
+System & QPU provider restrictions (queue, decoherence, backend) & N/A & \texttt{PyLinalg} is a noiseless local simulator; no external provider, queue, or backend selection applies. \\[2pt]
+       & Hardware calibration data (qubit topology, connectivity) & N/A & All-to-all connectivity assumed; no physical noise model is used. \\
 \bottomrule
 \end{tabular}
 \caption{Laboratory-package evaluation of the original
@@ -976,7 +994,7 @@ J.~Wu and P.~Xu,
 \emph{Quantum algorithm and experimental demonstration for the subset sum
 problem},
 Science China Information Sciences, vol.~65, no.~8, art.~182501, Aug.~2022.
-DOI: 10.1007/s11432-021-3334-1.
+\url{https://doi.org/10.1007/s11432-021-3334-1}.
 
 \bibitem{sato2024}
 R.~Sato, G.~Cui, K.~Saito, H.~Kawashima, T.~Nikuni and S.~Watabe,
@@ -996,28 +1014,28 @@ L.~Razzoli, G.~Cenedese, M.~Bondani and G.~Benenti,
 \emph{Efficient implementation of discrete-time quantum walks on quantum
 computers},
 Entropy, vol.~26, art.~313, Apr.~2024.
-DOI: 10.3390/e26040313.
+\url{https://doi.org/10.3390/e26040313}.
 
 \bibitem{dasilva2024}
 M.~H.~F.~da~Silva, G.~F.~de~Jesus and C.~Cruz,
 \emph{Effect of pure dephasing quantum noise in the quantum search algorithm
 using Atos quantum assembly},
 Entropy, vol.~26, art.~668, Aug.~2024.
-DOI: 10.3390/e26080668.
+\url{https://doi.org/10.3390/e26080668}.
 
 \bibitem{portugal2025}
 R.~Portugal and J.~K.~Moqadam,
 \emph{Efficient circuit implementations of continuous-time quantum walks for
 quantum search},
 Entropy, vol.~27, art.~454, 2025.
-DOI: 10.3390/e27050454.
+\url{https://doi.org/10.3390/e27050454}.
 
 \bibitem{wingbocanegra2025}
 A.~Wing-Bocanegra, C.~E.~Quintero-Narvaez and S.~E.~Venegas-Andraca,
 \emph{Circuit implementation and analysis of a quantum-walk based search
 complement algorithm},
 Scientific Reports, vol.~15, art.~4865, 2025.
-DOI: 10.1038/s41598-025-87304-0.
+\url{https://doi.org/10.1038/s41598-025-87304-0}.
 
 \bibitem{moguel2024}
 E.~Moguel, J.~A.~Parejo, A.~Ruiz-Cort\'es, J.~Garcia-Alonso and
