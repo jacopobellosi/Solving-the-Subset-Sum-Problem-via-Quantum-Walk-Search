@@ -639,67 +639,72 @@ works for comparison.
 \centering
 \begin{tikzpicture}
 \begin{axis}[
-    name=mainplot,
-    width=0.90\linewidth,
-    height=7.5cm,
-    axis y line*=left,
-    axis x line*=bottom,
+    width=0.62\linewidth,
+    height=8cm,
     xlabel={Input size $n$},
     ylabel={Qubits},
     xlabel style={font=\small},
-    ylabel style={font=\small, color=blue!70!black},
-    yticklabel style={font=\small, color=blue!70!black},
+    ylabel style={font=\small},
     tick label style={font=\small},
     xmin=2.8, xmax=10.5,
-    ymin=0, ymax=145,
+    ymin=0, ymax=135,
     xtick={3,4,5,7,10},
     ytick={0,30,60,90,120},
     grid=major,
-    grid style={dotted, gray!35},
-    legend pos=north west,
-    legend style={font=\scriptsize, fill=white, draw=gray!50},
+    grid style={dotted, gray!30},
+    legend style={
+        at={(1.04,1.0)},
+        anchor=north west,
+        font=\scriptsize,
+        fill=white,
+        draw=gray!40,
+        row sep=0pt,
+    },
+    legend cell align=left,
 ]
-\addplot[gray!55, dashed, line width=0.9pt, forget plot]
+% One dashed line per related work
+\addplot[olive!80!black, dashed, line width=0.9pt]
+    coordinates {(2.8,5)(10.5,5)};
+\addlegendentry{da Silva et al.\ (2024) --- 5\,q.}
+
+\addplot[violet!70!black, dashed, line width=0.9pt]
+    coordinates {(2.8,6)(10.5,6)};
+\addlegendentry{Wing-Bocanegra et al.\ (2025) --- 6\,q.}
+
+\addplot[teal!80!black, dashed, line width=0.9pt]
+    coordinates {(2.8,10)(10.5,10)};
+\addlegendentry{Zheng et al.\ (2022) / Portugal-Moqadam (2025) --- 10\,q.}
+
+\addplot[brown!70!black, dashed, line width=0.9pt]
+    coordinates {(2.8,12)(10.5,12)};
+\addlegendentry{Sato et al.\ (2024) --- 12\,q.}
+
+\addplot[orange!80!black, dashed, line width=0.9pt]
     coordinates {(2.8,27)(10.5,27)};
-\addplot[red!55, densely dotted, line width=0.9pt, forget plot]
+\addlegendentry{Razzoli et al.\ (2024) --- 27\,q.}
+
+% Simulator ceiling
+\addplot[red!60, densely dotted, line width=1pt]
     coordinates {(2.8,32)(10.5,32)};
-\addplot[blue!70!black, solid, line width=1.3pt, mark=*, mark size=2.2pt]
+\addlegendentry{Simulator ceiling ($\approx$32\,q.)}
+
+% MNRS qubit scaling (this work + Table III)
+\addplot[blue!70!black, solid, line width=1.6pt, mark=*, mark size=2.3pt]
     coordinates {(3,30)(4,38)(5,57)(7,75)(10,126)};
-\addlegendentry{MNRS qubits (left axis)}
-\addlegendimage{orange!80!black, dashed, line width=1.3pt, mark=square*,
-    mark size=2pt}
-\addlegendentry{MNRS gates U$+$CNOT (right axis)}
-\node[font=\scriptsize, gray!65, anchor=west]
-    at (axis cs:5.5,22) {Related works ceiling (27 q.)};
-\node[font=\scriptsize, red!65, anchor=west]
-    at (axis cs:5.5,34.5) {Simulator ceiling ($\approx$32 q.)};
-\end{axis}
-\begin{axis}[
-    width=0.90\linewidth,
-    height=7.5cm,
-    axis y line*=right,
-    axis x line=none,
-    ylabel={Total gates (U$+$CNOT)},
-    ylabel style={font=\small, color=orange!80!black},
-    yticklabel style={font=\small, color=orange!80!black},
-    xmin=2.8, xmax=10.5,
-    ymin=0, ymax=70000,
-    scaled y ticks=false,
-    ytick={0,20000,40000,60000},
-]
-\addplot[orange!80!black, dashed, line width=1.3pt, mark=square*, mark size=2pt]
-    coordinates {(4,7560)(5,16350)(7,27335)(10,59324)};
+\addlegendentry{MNRS --- this work (qubits)}
 \end{axis}
 \end{tikzpicture}
-\caption{Scaling of qubits (left axis, solid blue) and total gate count
-U$+$CNOT (right axis, dashed orange) for the MNRS algorithm as $n$ increases,
-with $k=\lfloor n/2 \rfloor$.
-Qubit count at $n=3$ is from this work's measurements; all other values are
-from Table~III of the paper (Qiskit basis, $n \in \{4,5,7,10\}$).
-Gate counts for the related works are not reported in a comparable form.
-The dashed grey line marks the highest qubit count among the related works
-(27~qubits, Razzoli et al.~\cite{razzoli2024}); the dotted red line marks the
-approximate state-vector simulator ceiling ($\approx$32~qubits).}
+\caption{Qubit scaling of the MNRS algorithm (solid blue, data points from
+this work at $n{=}3$ and from Table~III of the paper for
+$n \in \{4,5,7,10\}$, with $k=\lfloor n/2\rfloor$) compared with the
+maximum qubit count of each surveyed related work (dashed lines).
+Even the smallest MNRS instance ($n{=}3$, $30$~qubits) already exceeds the
+largest related work (Razzoli et al., $27$~qubits on real hardware) and sits
+above the approximate state-vector simulator ceiling (${\approx}32$~qubits,
+dotted red). Perriello et al.\ (${\approx}2^{32}$ logical qubits) is off scale
+and excluded. Gate counts for the related works are not reported in a
+comparable form; see Table~\ref{tab:mods} for the gate progression of this
+work.}
 \label{fig:scaling}
 \end{figure}
 
