@@ -74,8 +74,8 @@ Politecnico di Milano}
 
 The objective of this project was to reproduce the results
 of the paper \emph{``Solving the Subset Sum Problem via Quantum
-Walk Search''} (Lancellotti, Perriello, Barenghi, Pelosi; IEEE
-Transactions on Computers, vol.~75, n.~1, 2026). The paper
+Walk Search''} by Lancellotti, Perriello, Barenghi and
+Pelosi~\cite{lancellotti2026}. The paper
 proposes a gate-level quantum algorithm for the Constrained
 Subset Sum Problem (CSSP) and provides a reference implementation
 in \texttt{myQLM}; the assignment was to read the paper and the code
@@ -171,7 +171,7 @@ T_S \;+\; \frac{1}{\sqrt{\varepsilon}}\!\left(\frac{T_U}{\sqrt{\delta}} + T_C\ri
 \]
 where $T_S$ is the cost of preparing the stationary state, $T_U$ the cost of one walk step and $T_C$ the cost of one oracle call. The $1/\sqrt{\delta}$ factor is where the quadratic speed-up over classical brute force comes from.
 
-\subsection{Analytical Validation and Scope}
+\subsection{Analytical validation and scope}
 
 The paper provides closed-form analytical estimates of gate
 count, depth and qubit count of every sub-routine; a comparison
@@ -179,8 +179,8 @@ against a Grover baseline showing better T-count for $n \ge 25$
 and better T-depth for $n \ge 2^{13}$; and reference
 open-source implementations in Qiskit and \texttt{myQLM}. It does
 not, however, run the algorithm end-to-end on any concrete
-instance: the cryptographic regime targeted by the paper is far
-above any classical state-vector simulator. The paper itself
+instance: the cryptographic regime targeted by the paper is
+far beyond the reach of any classical state-vector simulator. The paper itself
 states that ``the smallest non-trivial case ($n=4$, $k=2$)
 already requires $38$ qubits, exceeding the practical limits of
 classical simulation'', with Table~III of the paper tabulating resources for
@@ -188,7 +188,7 @@ $n \in \{4,\dots,10\}$ and $k = \lfloor n/2 \rfloor$. The
 algorithm is designed for fault-tolerant hardware, so validation
 is restricted to the building blocks taken individually.
 
-\subsection{Baseline Execution on the Smallest Instance}
+\subsection{Baseline execution on the smallest instance}
 
 The first experiment consisted in a direct execution of
 \texttt{cssp.py} on the smallest instance compatible with
@@ -232,8 +232,8 @@ Ckpt 1  Dicke + VBE:
   uniform over the 3 subsets
 
 Ckpt 3  Post-Oracle:
-  ampl=+0.289 on Sum=2
-  ampl=-0.289 on Sum=3  <-- phase flip OK
+  ampl=+0.289 on Sum:2
+  ampl=-0.289 on Sum:3  <-- phase flip OK
 
 Ckpt 4-5  Post-QPE / Post-Diffusion:
   signs scrambled, no concentration
@@ -250,9 +250,10 @@ Ckpt 6  End of iteration:
 
 Both compilation and simulation terminate without errors, so the
 problem is not a low-level implementation bug. The five
-modifications described in Section~\ref{sec:work} were the
-sequence of attempts to localise where the amplification fails to
-occur, the underlying reason is explained in Section~\ref{sec:work} after all five modifications have been described.
+modifications described in Section~\ref{sec:work} are the sequence
+of attempts to localise where the amplification fails. The
+underlying reason is explained at the end of that section, once
+all five modifications have been introduced.
 
 % =====================================================================
 \section{Modifications applied to the code}
@@ -311,16 +312,15 @@ smallest instance it is not the cause of the missing amplification.
 $\alpha/\omega$ cleanup block (20--23 March 2026)}
 
 \emph{What this fix is about.} The QPE block in the original
-code tried to manually reset two ancillary registers
-($\alpha$ and $\omega$, used during the walk steps) to zero
-before the final QFT. The reset routine is correct only if those
-registers are already in $|0\rangle$, but at that point in the
-circuit they are entangled with the visited vertices, so the
-manual reset corrupts the state instead of cleaning it. The
-correct uncomputation is automatic in \texttt{myQLM} and the
-manual block is therefore removed.
-
-After the walk steps inside the QPE block, the original code tried to manually reset two ancillary registers ($\alpha$ and $\omega$) back to $|0\rangle$. The problem is that at that point those registers are \emph{entangled} with the current vertex: they no longer hold an independent value that can simply be erased. Re-applying \texttt{generate} to an entangled register corrupts the quantum state instead of cleaning it. The \texttt{myQLM} framework already handles this correctly via the \texttt{prw.uncompute()} call at the end of the \texttt{compute()} block, so the manual cleanup is both redundant and destructive.
+code tried to manually reset two ancillary registers ($\alpha$ and
+$\omega$, used during the walk steps) back to $|0\rangle$ before
+the final QFT. At that point those registers are \emph{entangled}
+with the current vertex: re-applying \texttt{generate} to an
+entangled register corrupts the quantum state instead of cleaning
+it. The \texttt{myQLM} framework already handles this correctly via
+the \texttt{prw.uncompute()} call at the end of the
+\texttt{compute()} block, so the manual cleanup is both redundant
+and destructive and is therefore removed.
 
 \begin{lstlisting}[language=Python]
 # --- Before ---
@@ -344,22 +344,30 @@ prw.apply(generate(n - k, 1), wstate_zeros)
 
 The gate count drops by about $47\%$, confirming that the cleanup
 block was redundant. A surgical per-element reset of $\alpha$ and
-$\omega$ that does not touch the entangled state would be
-preferable to a global removal, but its design lies outside the
-scope of these patches and was therefore not pursued. The output
-distribution stays the same.
+$\omega$ --- one that does not touch the entangled state --- would
+be preferable to a global removal, but designing it lies outside
+the scope of these patches. The output distribution stays the same.
 
 \subsection*{Modification 3 --- Use of \texttt{insert\_lw}
 instead of \texttt{insert\_ld} (22 March 2026)}
 
-\emph{What this fix is about.} The walk step inserts and deletes
-elements from a small sorted list. The library offered two
-versions of the routine, and the version selected by default
-left ``garbage'' bits in the workspace whenever \texttt{delete}
-was applied to its output. The fix swaps to the version that
-behaves as the inverse of \texttt{insert} on the same input.
+\emph{What this modification is about.} The walk step inserts and
+deletes elements from a small sorted list. The paper provides two
+versions of the update operator (\emph{low-width} and \emph{low-depth})
+and exposes both through an internal flag, but the default
+configuration mixes them in a way that makes \texttt{delete} not the
+inverse of \texttt{insert}. Switching the default to the low-width
+variant restores reversibility.
 
-The paper provides two versions of the update operator: a \emph{low-width} variant (fewer ancilla qubits, sequential) and a \emph{low-depth} variant (faster in principle, but needs more ancillas). For the walk to work correctly, each \texttt{insert} and its corresponding \texttt{delete} must be exact inverses of each other. A reversibility test showed that \texttt{delete} built on \texttt{insert\_ld} leaves leftover values in the ancillas (the source code itself had a comment warning about this), so the composition \texttt{delete}~$\circ$~\texttt{insert\_ld} is not the identity. Over many walk steps these leftover values accumulate and corrupt the QPE register. The fix replaces \texttt{insert\_ld} with \texttt{insert\_lw} inside \texttt{delete}, which passes the reversibility test.
+For the walk to work correctly, each \texttt{insert} and its
+corresponding \texttt{delete} must be exact inverses. A reversibility
+test showed that \texttt{delete} built on \texttt{insert\_ld} leaves
+leftover values in the ancillas (the source code itself contains a
+comment warning about this), so the composition \texttt{delete}~$\circ$~\texttt{insert\_ld}
+is not the identity. Over many walk steps these leftover values
+accumulate and corrupt the QPE register. The change replaces
+\texttt{insert\_ld} with \texttt{insert\_lw} inside \texttt{delete},
+which passes the reversibility test.
 
 \begin{lstlisting}[language=Python]
 # --- After (22 March 2026) ---
@@ -373,9 +381,11 @@ insert = insert_lw if low_width else insert_ld    # reversible default
 0.33333  |1>     0.33333  |2>     0.33333  |3>
 \end{lstlisting}
 
-This is a structural fix: the walk operator was not unitary on
-the ancillary subspace before the change. The output distribution
-is again unchanged on the smallest instance.
+This is a deliberate variant choice rather than a defect of the
+upstream code: the same behaviour is reachable through the existing
+\texttt{low\_width} flag, so the change was kept local and not
+propagated upstream. The output distribution is unchanged on the
+smallest instance.
 
 \subsection*{Modification 4 --- Clamping the spectral gap and
 forcing a minimum QPE precision (27 March 2026)}
@@ -409,15 +419,15 @@ backward-compatible.
 \subsection*{Modification 5 --- Diagnostic checkpoints
 (17 April 2026)}
 
-\emph{What this modification is about.} Modifications~1 and~4 are genuine bugs confirmed upstream; Modification~2 is a local mitigation; Modification~3 is not a defect but a variant choice. Despite these changes, the output remains unchanged. To find out
-\emph{where} in the circuit the amplification is being lost, the
-algorithm is instrumented so that the full quantum state can be
-inspected at six key points of one MNRS iteration.
+\emph{What this modification is about.} The first four modifications
+leave the output distribution unchanged. To find out \emph{where}
+in the circuit the amplification is being lost, the algorithm is
+instrumented so that the full quantum state can be inspected at
+six key points of one MNRS iteration.
 
-To localise where the amplification is being lost, an
-instrumented copy \texttt{cssp\_with\_checkpoint.py} was written.
+An instrumented copy \texttt{cssp\_with\_checkpoint.py} was written.
 It simulates the full state at six key points of one MNRS
-iteration (Dicke + VBE\footnote{Variable-Basis Encoding, the ripple-carry adder used to initialise the weight registers.}, edge superposition, post-oracle, post-QPE,
+iteration (Dicke + VBE\footnote{Vedral--Barenco--Ekert, the ripple-carry adder construction used to compute the weighted sum.}, edge superposition, post-oracle, post-QPE,
 post-diffusion, end of iteration) and prints, for each state with
 $p > 5 \cdot 10^{-4}$, the probability and the complex amplitude,
 parsed into the named registers (Dicke, $S_1$, $S_0$, $T$,
@@ -446,7 +456,7 @@ the other eigenphases of $U_W$.
 
 \subsection{Why the output remains flat after the fixes}
 
-After Modifications 1--5 the marginal distribution on $S_1$ is
+After Modifications~1--5, the marginal distribution on $S_1$ is
 still $(\tfrac13,\tfrac13,\tfrac13)$ (Table~\ref{tab:mods}). The reason is not a single
 local bug, but a structural mismatch between the regime in which
 MNRS delivers a quadratic speed-up and the smallest instances that
@@ -473,9 +483,9 @@ the size of the simulator.
 \textbf{Effect on gates} & \textbf{Effect on distribution}\\
 \midrule
 1 & 17 Mar & Genuine bug fix & $2547 \to 2581$ & flat \\
-2 & 20 Mar & Genuine bug (local mitigation) & $2547 \to 1359$ ($-47\%$) & flat \\
-3 & 22 Mar & Not a defect upstream  & $1359 \to 1366$ & flat \\
-4 & 27 Mar & Defensive patch & $1366$ ($28 \to 30$ qubits) & flat \\
+2 & 20 Mar & Genuine bug, local mitigation & $2581 \to 1359$ ($-47\%$) & flat \\
+3 & 22 Mar & Variant choice (not a defect)  & $1359 \to 1366$ & flat \\
+4 & 27 Mar & Genuine bug fix & $1366$ ($28 \to 30$ qubits) & flat \\
 5 & 17 Apr & Diagnostic tool & no change & flat  \\
 \bottomrule
 \end{tabular}
@@ -607,8 +617,9 @@ is the size of the experiments that the surveyed works actually
 run. The papers that publish a measured output distribution use
 between $5$ and $27$ qubits: $5$ for da Silva et al.\ on a
 $16$-element database, $6$--$12$ for Sato et al.\ and Zheng et
-al.\ on small SSP- and TSP-like instances, $4$--$10$ for the
-walks of Portugal \& Moqadam and Wing-Bocanegra, and up to $27$
+al.\ on small SSP- and TSP-like instances, around $6$--$10$ for
+the walks of Wing-Bocanegra et al.\ and Portugal \& Moqadam (up to
+$K_{64}$ and $Q_{10}$, respectively), and up to $27$
 qubits for the free walk of Razzoli et al.\ that runs on real
 NISQ (Noisy Intermediate-Scale Quantum) hardware. The only work in the table that does not publish
 a measured distribution is Perriello et al., whose targets reach
@@ -619,15 +630,15 @@ publishes resource estimates.
 
 The MNRS pipeline of the paper we studied sits in a different
 budget. Even after all five modifications, the smallest instance $J(3,1)$
-already requires $30$ qubits and roughly $1\,400$ gates.
+already requires $30$ qubits and roughly $1\,370$ gates.
 At the same time, $J(3,1)$ is below the regime in which MNRS provides any speed-up.
 The smallest instance that the paper itself considers
-non-trivial, $J(4,2)$ with bit-width $m=2$ bits per element, is $38$ qubits and is also the
-smallest one explicitly tabulated. To enter a regime in which
+non-trivial --- $J(4,2)$ with bit-width $m=2$ bits per element ---
+requires $38$ qubits and is the smallest case tabulated. To enter a regime in which
 the spectral gap $\delta$ is strictly below $1$ and the algorithm
 has an actual amplification window to exploit, one needs at least
 $J(5,2)$, $J(6,2)$ or $J(6,3)$, which Table~III of the paper tabulates
-as requiring several tens of qubits. The cryptographic regime targeted by
+at $57$ qubits or more (see also Figure~\ref{fig:scaling}). The cryptographic regime targeted by
 the asymptotic analysis is much larger still: $n \ge 25$ for a
 T-count advantage over Grover and $n \ge 2^{13}$ for a T-depth
 advantage, with qubit counts that grow as $\Theta(n \log n)$.
@@ -699,16 +710,16 @@ this work at $n{=}3$ and from Table~III of the paper for
 $n \in \{4,5,7,10\}$, with $k=\lfloor n/2\rfloor$) compared with the
 maximum qubit count of each surveyed related work (dashed lines).
 Even the smallest MNRS instance ($n{=}3$, $30$~qubits) already exceeds the
-largest related work (Razzoli et al., $27$~qubits on real hardware) and sits
-above the approximate state-vector simulator ceiling (${\approx}32$~qubits,
-dotted red). Perriello et al.\ (${\approx}2^{32}$ logical qubits) is off scale
+qubit count of every surveyed work (the maximum being Razzoli et al.,
+$27$~qubits on real hardware) and sits above the approximate state-vector
+simulator ceiling (${\approx}32$~qubits, dotted red). Perriello et al.\ (${\approx}2^{32}$ logical qubits) is off scale
 and excluded. Gate counts for the related works are not reported in a
 comparable form; see Table~\ref{tab:mods} for the gate progression of this
 work.}
 \label{fig:scaling}
 \end{figure}
 
-\subsection{Constraints on End-to-End Simulation}
+\subsection{Constraints on end-to-end simulation}
 
 Two ceilings explain why the surveyed works can publish a
 measured distribution while ours cannot:
@@ -903,76 +914,76 @@ repository already provides; only ``$\sim$'' and
 
 \subsection{Critical points that have been addressed}
 
-The following items from Tables~\ref{tab:reporting}
-and~\ref{tab:labpackage} above, and from the broader code-and-paper
-mapping, were closed by the upstream pull request or by artefacts
-produced during this project. The two code correctness fixes
-(Modifications~1 and~4) are described in full in
-Section~\ref{sec:work}; they are noted here because they emerged
-directly from the mapping analysis.
+The following rows of Tables~\ref{tab:reporting}
+and~\ref{tab:labpackage} are now satisfied (in full or in part)
+by the upstream pull request and by the artefacts produced
+during this study.
 
-\paragraph{Asymmetric reflections inside the QPE block.}
-Both Reflection~A and Reflection~B now control the phase flip on
-the full coin register, with the corresponding $X$-sandwich
-applied symmetrically to both halves. This corresponds to
-Modification~1 of Section~\ref{sec:work}.
+\paragraph{Tab.~\ref{tab:labpackage}, \emph{Download/run instructions}.}
+Closed. The rewritten \texttt{README} adds the citation to the
+paper, an explicit list of dependencies (\texttt{myQLM},
+\texttt{qat-utils}) and a usage block matching the actual flags of
+\texttt{cssp.py}.
 
-\paragraph{Degenerate QPE register on small instances.}
-The lower bound on $\ell_s$ has been raised so that the QPE
-register is never trivial. The change is invisible on instances
-in which the original formula already returned a value above the
-new floor, hence fully backward-compatible. This corresponds to
-Modification~4.
+\paragraph{Tab.~\ref{tab:reporting}, \emph{Pinned framework version
+/ dependencies}.}
+Partially closed. The rewritten \texttt{README} now lists
+\texttt{myQLM} and \texttt{qat-utils} as explicit requirements; a
+pinned \texttt{requirements.txt} is still missing.
 
-\paragraph{Documentation gap between paper and code.}
-The original \texttt{README} did not cite the paper, did not
-list the dependencies and did not describe the command-line
-interface of \texttt{cssp.py}. The rewritten file adds the
-citation, an explicit list of requirements
-(\texttt{myQLM}, \texttt{qat-utils}) and a usage block matching
-the actual flags accepted by the script. This closes the
-\ding{55}~row \emph{Download/run instructions} in
-Table~\ref{tab:labpackage}.
+\paragraph{Tab.~\ref{tab:labpackage}, \emph{Resulting datasets /
+log files}.}
+Partially closed. Modification~5 produces a structured checkpoint
+dump for $J(3,1)$ at six points of one walk iteration; the
+upstream repository itself still does not generate logs.
+
+\paragraph{Code-correctness fixes from the mapping (not table rows).}
+The mapping also surfaced two genuine bugs in the upstream code
+that are not rows of Tables~\ref{tab:reporting}/\ref{tab:labpackage}:
+asymmetric QPE reflections (Modification~1) and a degenerate QPE
+register on small instances (Modification~4). Both were confirmed
+by the paper authors and merged upstream as part of the same pull
+request; Section~\ref{sec:work} describes them in full.
 
 \subsection{Critical points that remain open}
 
-The other ``$\sim$'' and ``\ding{55}'' rows of
-Tables~\ref{tab:reporting} and~\ref{tab:labpackage} are not
-fixed by the present pull request and remain natural next steps.
+The great majority of the ``$\sim$'' and ``\ding{55}'' rows of
+Tables~\ref{tab:reporting} and~\ref{tab:labpackage} are still
+open. Rather than enumerate them, the main themes are summarised
+here.
 
-\paragraph{End-to-end validation is structurally infeasible on a
-state-vector simulator.}
-As recalled in Section~\ref{sec:paper}, even the smallest
-instance reported in the paper exceeds the practical ceiling of
-\texttt{PyLinalg} on commodity hardware. This is not a defect of
-the code but a property of the algorithmic regime targeted by
-the paper.
+\paragraph{Reproducibility artefacts (most of the open rows).}
+The repository still lacks a pinned \texttt{requirements.txt} or
+\texttt{Dockerfile}, random seeds, an explicit \texttt{LICENSE},
+a file/folder manifest, a DOI, automated analysis scripts (CSV,
+plots), structured log files and a formal description of the
+classical software architecture. None of these require touching
+the algorithm.
 
-\paragraph{Surgical reset of the cleanup ancillas.}
-The removal of the destructive cleanup block (Modification~2) is
-a local mitigation: a per-element reset of $\alpha$ and $\omega$
-that does not touch the entangled state would be the proper fix,
-but it requires a different construction and was therefore not
-included in the upstream pull request.
+\paragraph{Test coverage.}
+The full \texttt{cssp.py} pipeline has no end-to-end test, and the
+\emph{low-width} variant of the sliding-sort routine has no test
+at all. The issues addressed in Modifications~1 and~3 would both
+have been caught earlier by such tests.
 
-\paragraph{Test coverage of the composite walk operator.}
-The existing tests cover the building blocks
-(\texttt{insert}, \texttt{delete}, oracle, Dicke preparation) in
-isolation, but there is no test that exercises the full walk
-operator $U_W$ as a single unit, and there is no test for the
-\emph{low-width} variant of the sliding-sort routine. The bugs
-identified in Modifications~1 and~3 would have been caught
-earlier by such tests.
+\paragraph{Items not actionable in this setting.}
+Random seeds, readout error mitigation, statistical aggregation
+across runs and quantum error correction are formally open in
+Table~\ref{tab:reporting} but are not meaningful for a
+deterministic, noiseless state-vector simulation. They should
+nonetheless be \emph{declared} explicitly in the paper, which
+they currently are not.
 
-\paragraph{Reproducibility artefacts.}
-The repository does not provide a pinned environment
-(\texttt{requirements.txt}, \texttt{Dockerfile}), random seeds
-for the simulator, an explicit \texttt{LICENSE} file, an
-artefact dictionary, or a script for processing the output of
-\texttt{cssp.py} (CSV, plots). All of these are required by the
-laboratory-package framework of Moguel et al.\ and would
-significantly shorten the on-boarding time of any future
-contributor.
+\paragraph{End-to-end measured distribution and the surgical
+ancilla reset.}
+A measured output distribution from the full pipeline is
+structurally out of reach (Section~\ref{sec:compare}): the smallest
+non-trivial instance already exceeds the simulator ceiling, and the
+cryptographic regime is far above current NISQ resources. The
+proper fix for Modification~2 --- a per-element reset of $\alpha$
+and $\omega$ that does not touch the entangled state --- requires
+a different construction and was deferred from the upstream pull
+request.
 
 % =====================================================================
 \section{Conclusions}
@@ -983,7 +994,7 @@ The project started as a reproduction attempt of the paper's algorithm on the sm
 
 The bugs confirmed as real by the paper authors were merged upstream as pull request~\#1 (\texttt{paper-codes/2025-TC}), together with a rewritten \texttt{README}. The flat output is not a defect of the code: it is a consequence of the gap between the algorithmic regime targeted by the paper and the largest instance a state-vector simulator can reach.
 
-Future work could follow one of two paths: a direct Grover search on a compact vertex register, which validates the idea of amplitude amplification at small scale; or a stripped-down MNRS variant with an exact reflection, which keeps the walk structure without strict resource requirements. Either route would close the simulation gap while remaining connected to the paper's ideas.
+Future work could follow one of two paths: a direct Grover search on a compact vertex register, which validates the idea of amplitude amplification at small scale; or a stripped-down MNRS variant with an exact reflection, which keeps the walk structure without the prohibitive resource requirements of the full pipeline. Either route would close the simulation gap while remaining connected to the paper's ideas.
 
 \bigskip
 
@@ -993,6 +1004,12 @@ Future work could follow one of two paths: a direct Grover search on a compact v
 \bigskip
 
 \begin{thebibliography}{9}
+\bibitem{lancellotti2026}
+G.~Lancellotti, S.~Perriello, A.~Barenghi and G.~Pelosi,
+\emph{Solving the subset sum problem via quantum walk search},
+IEEE Transactions on Computers, vol.~75, no.~1, Jan.~2026.
+\url{https://doi.org/10.1109/TC.2025.3625044}.
+
 \bibitem{zheng2022}
 Q.~Zheng, P.~Zhu, S.~Xue, Y.~Wang, C.~Wu, X.~Yu, M.~Yu, Y.~Liu, M.~Deng,
 J.~Wu and P.~Xu,
